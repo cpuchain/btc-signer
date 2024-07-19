@@ -53,6 +53,7 @@ export declare class CoinBalance {
 }
 export interface WalletConfig {
     mnemonic?: string;
+    mnemonicIndex?: number;
     publicKey?: string;
     privateKey?: string;
     addrType?: addrType;
@@ -69,7 +70,6 @@ export declare class CoinWallet {
     constructor(provider: CoinProvider, config: WalletConfig, generateRandom?: boolean);
     static fromBuffer(provider: CoinProvider, config: WalletConfig, bufferKey: Buffer): CoinWallet;
     getKey(index?: number): ECPairInterface | BIP32Interface | ViewKey;
-    setKey(index?: number): void;
     getBip32Derivation(index?: number): Array<Bip32Derivation | TapBip32Derivation>;
     getChangeAddress(): string;
     getUtxoAddress(): {
@@ -81,13 +81,15 @@ export declare class CoinWallet {
     populateTransaction(outputs: Array<Output>, customFeePerByte?: number, cachedBalance?: CoinBalance, spendAll?: boolean): Promise<CoinTX>;
     populateConsolidation(customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<CoinTX[]>;
     parseTransaction(psbtHex: string): CoinTX;
-    signTransaction(psbt: Psbt): Transaction;
+    signTransaction(psbt: Psbt, keyIndex?: number): Transaction;
     sendTransaction(outputs: Array<Output>, customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<CoinTX>;
 }
 export declare class MnemonicWallet extends CoinWallet {
     mnemonic: string;
+    mnemonicIndex: number;
     onlySingle: boolean;
     constructor(provider: CoinProvider, config: WalletConfig, onlySingle?: boolean, generateRandom?: boolean);
+    setKey(index?: number): void;
     getPub(): string;
     getUtxoAddress(): {
         address: string;

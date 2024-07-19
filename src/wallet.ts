@@ -140,6 +140,7 @@ export class CoinBalance {
 
 export interface WalletConfig {
     mnemonic?: string;
+    mnemonicIndex?: number;
     publicKey?: string;
     privateKey?: string;
     addrType?: addrType;
@@ -218,19 +219,6 @@ export class CoinWallet {
             throw new Error('View only wallet or privateKey not available');
         }
         return ECPair.fromWIF(this.privateKey, this.network);
-    }
-
-    setKey(index: number = 0) {
-        const keyPair = this.getKey(index);
-
-        this.address = getAddress(
-            keyPair.publicKey,
-            this.addrType,
-            this.network,
-        ) as string;
-        this.publicKey = keyPair.publicKey.toString('hex');
-        this.privateKey = keyPair.toWIF();
-        this.privateKeyWithPrefix = `${electrumKeys[this.addrType]}:${this.privateKey}`;
     }
 
     getBip32Derivation(
@@ -584,8 +572,8 @@ export class CoinWallet {
         });
     }
 
-    signTransaction(psbt: Psbt) {
-        const key = this.getKey(0);
+    signTransaction(psbt: Psbt, keyIndex: number = 0) {
+        const key = this.getKey(keyIndex);
 
         // https://github.com/bitcoinjs/bitcoinjs-lib/blob/master/test/integration/taproot.spec.ts
         const tapKey = key.publicKey.slice(1, 33);
@@ -621,6 +609,7 @@ export class CoinWallet {
 
 export class MnemonicWallet extends CoinWallet {
     mnemonic: string;
+    mnemonicIndex: number;
     onlySingle: boolean;
 
     constructor(
@@ -633,10 +622,26 @@ export class MnemonicWallet extends CoinWallet {
 
         this.mnemonic =
             config.mnemonic || (generateRandom ? generateMnemonic(128) : '');
+        this.mnemonicIndex = config.mnemonicIndex || 0;
 
         this.onlySingle = onlySingle;
 
-        this.setKey();
+        this.setKey(this.mnemonicIndex);
+    }
+
+    setKey(index: number = 0) {
+        const keyPair = this.getKey(index);
+
+        this.address = getAddress(
+            keyPair.publicKey,
+            this.addrType,
+            this.network,
+        ) as string;
+        this.publicKey = keyPair.publicKey.toString('hex');
+        this.privateKey = keyPair.toWIF();
+        this.privateKeyWithPrefix = `${electrumKeys[this.addrType]}:${this.privateKey}`;
+
+        this.mnemonicIndex = index;
     }
 
     // Get Account Extended Public Key compatible with blockbook instance
@@ -728,7 +733,7 @@ export class MnemonicWallet extends CoinWallet {
 
     signTransaction(psbt: Psbt) {
         if (this.onlySingle) {
-            return super.signTransaction(psbt);
+            return super.signTransaction(psbt, this.mnemonicIndex);
         }
 
         const root = bip32.fromSeed(
