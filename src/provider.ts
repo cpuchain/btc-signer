@@ -1,4 +1,5 @@
-import { parseCoins, chunk, sleep } from './utils';
+import { chunk, sleep } from './utils';
+import { parseCoins } from './coinUtils';
 import type { UTXO, TX } from './types';
 
 export interface ProviderConfig {

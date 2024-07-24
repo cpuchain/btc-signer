@@ -44,5 +44,26 @@ module.exports = [
             libraryTarget: 'umd'
         },
         optimization: {},
+    },
+    {
+        ...config,
+        entry: './src/bip39org.ts',
+        output: {
+            filename: 'bip39org.umd.js',
+            path: path.resolve(__dirname, './lib'),
+            library: 'bip39org',
+            libraryTarget: 'umd'
+        },
+    },
+    {
+        ...config,
+        entry: './src/bip39org.ts',
+        output: {
+            filename: 'bip39org.umd.min.js',
+            path: path.resolve(__dirname, './lib'),
+            library: 'bip39org',
+            libraryTarget: 'umd'
+        },
+        optimization: {},
     }
 ]

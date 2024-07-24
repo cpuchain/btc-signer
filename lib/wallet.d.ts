@@ -2,7 +2,7 @@ import { Psbt, Transaction } from 'bitcoinjs-lib';
 import type { BIP32Interface } from 'bip32';
 import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
-import type CoinProvider from './provider';
+import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Input, Output, UTXO } from './types';
 export declare function getInputs(utxos: Array<UTXO>, outputs: Array<Output>, spendAll?: boolean): UTXO[];
 export interface CoinTXProperties {

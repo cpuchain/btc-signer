@@ -15,20 +15,19 @@ import type {
     Bip32Derivation,
     TapBip32Derivation,
 } from 'bip174/src/lib/interfaces';
+import { chunk, checkHex } from './utils';
 import {
-    chunk,
-    checkHex,
     formatCoins,
     getDerivation,
     getBytes,
     getScriptType,
     getAddress,
     getPubBytes,
-} from './utils';
+} from './coinUtils';
 import { electrumKeys } from './types';
 import { bip32, ECPair } from './factory';
 
-import type CoinProvider from './provider';
+import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Input, Output, UTXO } from './types';
 
 export function getInputs(
