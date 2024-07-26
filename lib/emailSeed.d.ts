@@ -1,3 +1,4 @@
+export { mnemonicToEntropy, mnemonicToSeed } from 'bip39';
 /**
  * Legacy coinb.in style hex string generation with email and password
  */

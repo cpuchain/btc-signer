@@ -11,6 +11,8 @@ import {
     binaryToBytes,
 } from './cryptoUtils';
 
+export { mnemonicToEntropy, mnemonicToSeed } from 'bip39';
+
 /**
  * Legacy coinb.in style hex string generation with email and password
  */
@@ -127,7 +129,7 @@ export async function getMnemonic(entropy: string, mnemonicLength?: number) {
 
 export async function getRandomMnemonic(mnemonicLength?: number) {
     const entropy = bytesToHex(
-        crypto.getRandomValues(new Uint8Array(64)),
+        crypto.getRandomValues(new Uint8Array(32)),
     ).substring(2);
 
     const { newEntropy, mnemonic, seed } = await getMnemonic(
