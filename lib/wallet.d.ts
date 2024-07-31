@@ -3,22 +3,22 @@ import type { BIP32Interface } from 'bip32';
 import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
 import type { CoinProvider } from './provider';
-import type { addrType, CoinInfo, Input, Output, UTXO } from './types';
+import type { addrType, CoinInfo, Output, UTXO } from './types';
 export declare function getInputs(utxos: Array<UTXO>, outputs: Array<Output>, spendAll?: boolean): UTXO[];
 export interface CoinTXProperties {
-    psbt: Psbt;
+    psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<Input>;
+    inputs: Array<UTXO>;
     outputAmounts: string;
     outputs: Array<Output>;
     vBytes: number;
 }
 export declare class CoinTX {
-    psbt: Psbt;
+    psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<Input>;
+    inputs: Array<UTXO>;
     outputAmounts: string;
     outputs: Array<Output>;
     vBytes: number;
@@ -27,7 +27,7 @@ export declare class CoinTX {
     toJSON(): {
         fees: string;
         inputAmounts: string;
-        inputs: Input[];
+        inputs: UTXO[];
         outputAmounts: string;
         outputs: {
             value: number;
@@ -78,11 +78,12 @@ export declare class CoinWallet {
     };
     getBalance(): Promise<CoinBalance>;
     getMaxSpendable(changeAddress?: string, customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<number>;
-    populateTransaction(outputs: Array<Output>, customFeePerByte?: number, cachedBalance?: CoinBalance, spendAll?: boolean): Promise<CoinTX>;
+    populateTransaction(outputs: Array<Output>, changeAddress?: string, customFeePerByte?: number, spendAll?: boolean, cachedBalance?: CoinBalance): Promise<CoinTX>;
+    populatePsbt(coinTx: CoinTX): Promise<void>;
     populateConsolidation(customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<CoinTX[]>;
     parseTransaction(psbtHex: string): CoinTX;
     signTransaction(psbt: Psbt, keyIndex?: number): Transaction;
-    sendTransaction(outputs: Array<Output>, customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<CoinTX>;
+    sendTransaction(outputs: Array<Output>, changeAddress?: string, customFeePerByte?: number, spendAll?: boolean, cachedBalance?: CoinBalance): Promise<CoinTX>;
 }
 export declare class MnemonicWallet extends CoinWallet {
     mnemonic: string;

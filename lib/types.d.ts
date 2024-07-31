@@ -34,7 +34,7 @@ export interface Output {
     bytes?: number;
 }
 export type UTXO = Input & {
-    height: number;
+    height?: number;
     confirmations?: number;
     address?: string;
     addressIndex?: number;

@@ -108,7 +108,7 @@ export class CoinProvider {
                 if (a.height === b.height) {
                     return a.vout - b.vout;
                 }
-                return a.height - b.height;
+                return Number(a.height) - Number(b.height);
             });
     }
 

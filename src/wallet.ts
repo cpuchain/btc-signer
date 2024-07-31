@@ -17,6 +17,7 @@ import type {
 } from 'bip174/src/lib/interfaces';
 import { chunk, checkHex } from './utils';
 import {
+    parseCoins,
     formatCoins,
     getDerivation,
     getBytes,
@@ -28,7 +29,7 @@ import { electrumKeys } from './types';
 import { bip32, ECPair } from './factory';
 
 import type { CoinProvider } from './provider';
-import type { addrType, CoinInfo, Input, Output, UTXO } from './types';
+import type { addrType, CoinInfo, Output, UTXO } from './types';
 
 export function getInputs(
     utxos: Array<UTXO>,
@@ -69,20 +70,20 @@ export function getInputs(
 }
 
 export interface CoinTXProperties {
-    psbt: Psbt;
+    psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<Input>;
+    inputs: Array<UTXO>;
     outputAmounts: string;
     outputs: Array<Output>;
     vBytes: number;
 }
 
 export class CoinTX {
-    psbt: Psbt;
+    psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<Input>;
+    inputs: Array<UTXO>;
     outputAmounts: string;
     outputs: Array<Output>;
     vBytes: number;
@@ -276,36 +277,120 @@ export class CoinWallet {
         customFeePerByte?: number,
         cachedBalance?: CoinBalance,
     ) {
-        const balance = cachedBalance || (await this.getBalance());
-
-        const feePerByte = customFeePerByte || balance.feePerByte;
-        const inputs = balance.utxos;
-
-        const outputScript = bitcoinAddress.toOutputScript(
-            changeAddress || (this.address as string),
-            this.network,
+        const { inputAmounts, fees } = await this.populateTransaction(
+            [],
+            changeAddress,
+            customFeePerByte,
+            true,
+            cachedBalance,
         );
 
-        const inputAmounts = inputs.reduce((acc, curr) => acc + curr.value, 0);
-        const inputBytes = getBytes(this.addrType) * inputs.length;
-        const outputBytes = getBytes(getScriptType(outputScript), false);
-
-        const vBytes = 10 + inputBytes + outputBytes;
-        const fees = feePerByte * vBytes;
-
-        return inputAmounts - fees;
+        return parseCoins(inputAmounts) - parseCoins(fees);
     }
 
     async populateTransaction(
         outputs: Array<Output>,
+        changeAddress?: string,
         customFeePerByte?: number,
-        cachedBalance?: CoinBalance,
         spendAll?: boolean,
+        cachedBalance?: CoinBalance,
     ) {
         const balance = cachedBalance || (await this.getBalance());
 
         const feePerByte = customFeePerByte || balance.feePerByte;
         const inputs = getInputs(balance.utxos, outputs, spendAll);
+
+        const { addrType, network } = this;
+
+        let inputAmounts = 0;
+        let outputAmounts = 0;
+
+        let inputBytes = 0;
+        let outputBytes = 0;
+
+        inputs.forEach((input) => {
+            inputAmounts += input.value;
+            inputBytes += input.bytes = getBytes(addrType);
+        });
+
+        outputs.forEach((output) => {
+            // Handle OP_RETURN
+            if (output.returnData && output.value === 0) {
+                const data = checkHex(output.returnData)
+                    ? Buffer.from(output.returnData.slice(2), 'hex')
+                    : Buffer.from(output.returnData, 'utf8');
+
+                output.script = payments.embed({
+                    data: [data],
+                }).output;
+
+                outputBytes += output.bytes = data.length + 12;
+                return;
+            }
+
+            // Special case for consolidation or to estimate fees when max spent
+            if (!output?.value) {
+                return;
+            }
+
+            outputAmounts += output.value;
+            outputBytes += output.bytes = getBytes(
+                getScriptType(
+                    bitcoinAddress.toOutputScript(output.address, network),
+                ),
+                false,
+            );
+        });
+
+        let vBytes = 10 + inputBytes + outputBytes;
+
+        let fees = vBytes * feePerByte;
+
+        const change = inputAmounts - outputAmounts - fees;
+        const changeAddr = changeAddress || this.getChangeAddress();
+
+        // If the user doesn't have enough funds to pay fees cancel the tx
+        if (change < 0) {
+            const error = `Insufficient amount to cover fees, wants ${formatCoins(outputAmounts + fees)} have ${formatCoins(inputAmounts)}`;
+            throw new Error(error);
+        }
+
+        if (change > fees && changeAddr) {
+            const output = {
+                address: changeAddr,
+                value: change,
+                bytes: getBytes(
+                    getScriptType(
+                        bitcoinAddress.toOutputScript(changeAddr, network),
+                    ),
+                    false,
+                ),
+            };
+            const outputFee = output.bytes * feePerByte;
+
+            // Exclude fee for change output
+            output.value -= outputFee;
+            fees += outputFee;
+
+            outputAmounts += output.value;
+            outputBytes += output.bytes;
+            vBytes += output.bytes;
+
+            outputs.push(output);
+        }
+
+        return new CoinTX({
+            fees: formatCoins(fees),
+            inputAmounts: formatCoins(inputAmounts),
+            inputs,
+            outputAmounts: formatCoins(outputAmounts),
+            outputs,
+            vBytes,
+        });
+    }
+
+    async populatePsbt(coinTx: CoinTX) {
+        const { inputs, outputs } = coinTx;
 
         const txs =
             this.addrType === 'legacy'
@@ -315,12 +400,6 @@ export class CoinWallet {
                 : [];
 
         const { addrType, network } = this;
-
-        let inputAmounts = 0;
-        let outputAmounts = 0;
-
-        let inputBytes = 0;
-        let outputBytes = 0;
 
         const psbt = new Psbt({ network });
 
@@ -342,9 +421,6 @@ export class CoinWallet {
             const tapInternalKey = key.publicKey.slice(1, 33);
 
             const bip32Derivation = this.getBip32Derivation(addressIndex);
-
-            inputAmounts += value;
-            inputBytes += input.bytes = getBytes(addrType);
 
             if (addrType === 'taproot') {
                 psbt.addInput({
@@ -408,8 +484,6 @@ export class CoinWallet {
                     data: [data],
                 }).output;
 
-                outputBytes += output.bytes = data.length + 12;
-
                 psbt.addOutput(output);
                 return;
             }
@@ -419,62 +493,10 @@ export class CoinWallet {
                 return;
             }
 
-            outputAmounts += output.value;
-            outputBytes += output.bytes = getBytes(
-                getScriptType(
-                    bitcoinAddress.toOutputScript(output.address, network),
-                ),
-                false,
-            );
-
             psbt.addOutput(output);
         });
 
-        let vBytes = 10 + inputBytes + outputBytes;
-
-        let fees = vBytes * feePerByte;
-
-        const change = inputAmounts - outputAmounts - fees;
-
-        // If the user doesn't have enough funds to pay fees cancel the tx
-        if (change < 0) {
-            const error = `Insufficient amount to cover fees, wants ${formatCoins(outputAmounts + fees)} have ${formatCoins(inputAmounts)}`;
-            throw new Error(error);
-        }
-
-        if (change > fees && this.getChangeAddress()) {
-            const output = {
-                address: this.getChangeAddress() as string,
-                value: change,
-                bytes: getBytes(addrType, false),
-            };
-            const outputFee = output.bytes * feePerByte;
-
-            // Exclude fee for change output
-            output.value -= outputFee;
-            fees += outputFee;
-
-            outputAmounts += output.value;
-            outputBytes += output.bytes;
-            vBytes += output.bytes;
-
-            outputs.push(output);
-            psbt.addOutput(output);
-        }
-
-        const createdTx = {
-            fees: formatCoins(fees),
-            inputAmounts: formatCoins(inputAmounts),
-            inputs,
-            outputAmounts: formatCoins(outputAmounts),
-            outputs,
-            vBytes,
-        };
-
-        return new CoinTX({
-            psbt,
-            ...createdTx,
-        });
+        coinTx.psbt = psbt;
     }
 
     async populateConsolidation(
@@ -487,10 +509,12 @@ export class CoinWallet {
         const inputs = chunk(balance.utxos, 500);
 
         return await Promise.all(
-            inputs.map((input) =>
-                this.populateTransaction(
+            inputs.map(async (input) => {
+                const tx = await this.populateTransaction(
                     [],
                     undefined,
+                    undefined,
+                    true,
                     new CoinBalance({
                         feePerByte,
                         utxos: input,
@@ -500,9 +524,12 @@ export class CoinWallet {
                         ),
                         coinbase: 0,
                     }),
-                    true,
-                ),
-            ),
+                );
+
+                await this.populatePsbt(tx);
+
+                return tx;
+            }),
         );
     }
 
@@ -589,16 +616,22 @@ export class CoinWallet {
 
     async sendTransaction(
         outputs: Array<Output>,
+        changeAddress?: string,
         customFeePerByte?: number,
+        spendAll?: boolean,
         cachedBalance?: CoinBalance,
     ) {
         const coinTx = await this.populateTransaction(
             outputs,
+            changeAddress,
             customFeePerByte,
+            spendAll,
             cachedBalance,
         );
 
-        const signed = this.signTransaction(coinTx.psbt);
+        await this.populatePsbt(coinTx);
+
+        const signed = this.signTransaction(coinTx.psbt as Psbt);
 
         coinTx.txid = await this.provider.broadcastTransaction(signed.toHex());
 
