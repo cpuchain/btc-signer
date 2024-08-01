@@ -4,6 +4,13 @@ import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
 import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Output, UTXO } from './types';
+export interface populateOptions {
+    changeAddress?: string;
+    customFeePerByte?: number;
+    spendAll?: boolean;
+    deductFees?: boolean;
+    cachedBalance?: CoinBalance;
+}
 export declare function getInputs(utxos: Array<UTXO>, outputs: Array<Output>, spendAll?: boolean): UTXO[];
 export interface CoinTXProperties {
     psbt?: Psbt;
@@ -77,13 +84,13 @@ export declare class CoinWallet {
         isPub?: boolean;
     };
     getBalance(): Promise<CoinBalance>;
-    getMaxSpendable(changeAddress?: string, customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<number>;
-    populateTransaction(outputs: Array<Output>, changeAddress?: string, customFeePerByte?: number, spendAll?: boolean, cachedBalance?: CoinBalance): Promise<CoinTX>;
+    getMaxSpendable({ changeAddress, customFeePerByte, cachedBalance, }?: populateOptions): Promise<number>;
+    populateTransaction(outputs: Array<Output>, { changeAddress, customFeePerByte, spendAll, deductFees, cachedBalance, }?: populateOptions): Promise<CoinTX>;
     populatePsbt(coinTx: CoinTX): Promise<void>;
-    populateConsolidation(customFeePerByte?: number, cachedBalance?: CoinBalance): Promise<CoinTX[]>;
+    populateConsolidation({ customFeePerByte, cachedBalance, }?: populateOptions): Promise<CoinTX[]>;
     parseTransaction(psbtHex: string): CoinTX;
     signTransaction(psbt: Psbt, keyIndex?: number): Transaction;
-    sendTransaction(outputs: Array<Output>, changeAddress?: string, customFeePerByte?: number, spendAll?: boolean, cachedBalance?: CoinBalance): Promise<CoinTX>;
+    sendTransaction(outputs: Array<Output>, populateOptions?: populateOptions): Promise<CoinTX>;
 }
 export declare class MnemonicWallet extends CoinWallet {
     mnemonic: string;

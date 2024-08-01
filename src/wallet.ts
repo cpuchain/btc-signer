@@ -31,6 +31,14 @@ import { bip32, ECPair } from './factory';
 import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Output, UTXO } from './types';
 
+export interface populateOptions {
+    changeAddress?: string;
+    customFeePerByte?: number;
+    spendAll?: boolean;
+    deductFees?: boolean;
+    cachedBalance?: CoinBalance;
+}
+
 export function getInputs(
     utxos: Array<UTXO>,
     outputs: Array<Output>,
@@ -272,28 +280,31 @@ export class CoinWallet {
         });
     }
 
-    async getMaxSpendable(
-        changeAddress?: string,
-        customFeePerByte?: number,
-        cachedBalance?: CoinBalance,
-    ) {
-        const { inputAmounts, fees } = await this.populateTransaction(
-            [],
+    async getMaxSpendable({
+        changeAddress,
+        customFeePerByte,
+        cachedBalance,
+    }: populateOptions = {}) {
+        const { inputAmounts, fees } = await this.populateTransaction([], {
             changeAddress,
             customFeePerByte,
-            true,
+            spendAll: true,
+            deductFees: false,
             cachedBalance,
-        );
+        });
 
         return parseCoins(inputAmounts) - parseCoins(fees);
     }
 
     async populateTransaction(
         outputs: Array<Output>,
-        changeAddress?: string,
-        customFeePerByte?: number,
-        spendAll?: boolean,
-        cachedBalance?: CoinBalance,
+        {
+            changeAddress,
+            customFeePerByte,
+            spendAll,
+            deductFees,
+            cachedBalance,
+        }: populateOptions = {},
     ) {
         const balance = cachedBalance || (await this.getBalance());
 
@@ -345,6 +356,15 @@ export class CoinWallet {
         let vBytes = 10 + inputBytes + outputBytes;
 
         let fees = vBytes * feePerByte;
+
+        // Deduct fees from outputs if enabled
+        if (deductFees) {
+            outputs.forEach((output) => {
+                const feePerOutput = Math.ceil(fees / outputs.length);
+                output.value -= feePerOutput;
+                outputAmounts -= feePerOutput;
+            });
+        }
 
         const change = inputAmounts - outputAmounts - fees;
         const changeAddr = changeAddress || this.getChangeAddress();
@@ -499,10 +519,10 @@ export class CoinWallet {
         coinTx.psbt = psbt;
     }
 
-    async populateConsolidation(
-        customFeePerByte?: number,
-        cachedBalance?: CoinBalance,
-    ) {
+    async populateConsolidation({
+        customFeePerByte,
+        cachedBalance,
+    }: populateOptions = {}) {
         const balance = cachedBalance || (await this.getBalance());
 
         const feePerByte = customFeePerByte || balance.feePerByte;
@@ -510,12 +530,9 @@ export class CoinWallet {
 
         return await Promise.all(
             inputs.map(async (input) => {
-                const tx = await this.populateTransaction(
-                    [],
-                    undefined,
-                    undefined,
-                    true,
-                    new CoinBalance({
+                const tx = await this.populateTransaction([], {
+                    spendAll: true,
+                    cachedBalance: new CoinBalance({
                         feePerByte,
                         utxos: input,
                         utxoBalance: input.reduce(
@@ -524,7 +541,7 @@ export class CoinWallet {
                         ),
                         coinbase: 0,
                     }),
-                );
+                });
 
                 await this.populatePsbt(tx);
 
@@ -616,18 +633,9 @@ export class CoinWallet {
 
     async sendTransaction(
         outputs: Array<Output>,
-        changeAddress?: string,
-        customFeePerByte?: number,
-        spendAll?: boolean,
-        cachedBalance?: CoinBalance,
+        populateOptions: populateOptions = {},
     ) {
-        const coinTx = await this.populateTransaction(
-            outputs,
-            changeAddress,
-            customFeePerByte,
-            spendAll,
-            cachedBalance,
-        );
+        const coinTx = await this.populateTransaction(outputs, populateOptions);
 
         await this.populatePsbt(coinTx);
 
