@@ -229,6 +229,31 @@ export class CoinWallet {
         return ECPair.fromWIF(this.privateKey, this.network);
     }
 
+    getKeyInfo(index: number = 0) {
+        const keyPair = this.getKey(index);
+
+        this.address = getAddress(
+            keyPair.publicKey,
+            this.addrType,
+            this.network,
+        ) as string;
+        this.publicKey = keyPair.publicKey.toString('hex');
+        this.privateKey = keyPair.toWIF();
+        this.privateKeyWithPrefix = `${electrumKeys[this.addrType]}:${this.privateKey}`;
+
+        return {
+            keyPair,
+            address: getAddress(
+                keyPair.publicKey,
+                this.addrType,
+                this.network,
+            ) as string,
+            publicKey: keyPair.publicKey.toString('hex'),
+            privateKey: keyPair.toWIF(),
+            privateKeyWithPrefix: `${electrumKeys[this.addrType]}:${this.privateKey}`,
+        };
+    }
+
     getBip32Derivation(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         index: number = 0,
@@ -670,16 +695,13 @@ export class MnemonicWallet extends CoinWallet {
     }
 
     setKey(index: number = 0) {
-        const keyPair = this.getKey(index);
+        const { address, publicKey, privateKey, privateKeyWithPrefix } =
+            this.getKeyInfo(index);
 
-        this.address = getAddress(
-            keyPair.publicKey,
-            this.addrType,
-            this.network,
-        ) as string;
-        this.publicKey = keyPair.publicKey.toString('hex');
-        this.privateKey = keyPair.toWIF();
-        this.privateKeyWithPrefix = `${electrumKeys[this.addrType]}:${this.privateKey}`;
+        this.address = address;
+        this.publicKey = publicKey;
+        this.privateKey = privateKey;
+        this.privateKeyWithPrefix = privateKeyWithPrefix;
 
         this.mnemonicIndex = index;
     }

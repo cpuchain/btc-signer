@@ -77,6 +77,13 @@ export declare class CoinWallet {
     constructor(provider: CoinProvider, config: WalletConfig, generateRandom?: boolean);
     static fromBuffer(provider: CoinProvider, config: WalletConfig, bufferKey: Buffer): CoinWallet;
     getKey(index?: number): ECPairInterface | BIP32Interface | ViewKey;
+    getKeyInfo(index?: number): {
+        keyPair: ECPairInterface | BIP32Interface | ViewKey;
+        address: string;
+        publicKey: string;
+        privateKey: string;
+        privateKeyWithPrefix: string;
+    };
     getBip32Derivation(index?: number): Array<Bip32Derivation | TapBip32Derivation>;
     getChangeAddress(): string;
     getUtxoAddress(): {
