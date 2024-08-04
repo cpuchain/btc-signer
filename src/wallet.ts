@@ -37,6 +37,7 @@ export interface populateOptions {
     spendAll?: boolean;
     deductFees?: boolean;
     cachedBalance?: CoinBalance;
+    requiredConfirmations?: number;
 }
 
 export function getInputs(
@@ -44,6 +45,11 @@ export function getInputs(
     outputs: Array<Output>,
     spendAll: boolean = false,
 ) {
+    // Throw if the outputs are not specified but this is not a consolidation nor balance calculation
+    if (!outputs.length && !spendAll) {
+        throw new Error('getInputs: spendAll not specified but no outputs!');
+    }
+
     const outputAmounts = outputs.reduce((acc, output) => {
         acc += output.value;
         return acc;
@@ -271,7 +277,7 @@ export class CoinWallet {
         };
     }
 
-    async getBalance() {
+    async getBalance(requiredConfirmations?: number) {
         let coinbase = 0;
         let utxoBalance = 0;
 
@@ -293,6 +299,16 @@ export class CoinWallet {
                 coinbase += utxo.value;
                 return false;
             }
+
+            // Filter unconfirmed utxos or confirmations lower than required ones
+            if (
+                requiredConfirmations &&
+                (!utxo.confirmations ||
+                    utxo.confirmations < requiredConfirmations)
+            ) {
+                return false;
+            }
+
             utxoBalance += utxo.value;
             return true;
         });
@@ -329,9 +345,11 @@ export class CoinWallet {
             spendAll,
             deductFees,
             cachedBalance,
+            requiredConfirmations,
         }: populateOptions = {},
     ) {
-        const balance = cachedBalance || (await this.getBalance());
+        const balance =
+            cachedBalance || (await this.getBalance(requiredConfirmations));
 
         const feePerByte = customFeePerByte || balance.feePerByte;
         const inputs = getInputs(balance.utxos, outputs, spendAll);
@@ -547,8 +565,10 @@ export class CoinWallet {
     async populateConsolidation({
         customFeePerByte,
         cachedBalance,
+        requiredConfirmations,
     }: populateOptions = {}) {
-        const balance = cachedBalance || (await this.getBalance());
+        const balance =
+            cachedBalance || (await this.getBalance(requiredConfirmations));
 
         const feePerByte = customFeePerByte || balance.feePerByte;
         const inputs = chunk(balance.utxos, 500);
@@ -602,6 +622,9 @@ export class CoinWallet {
             inputAmounts += value;
 
             return {
+                // Height and conf not really necessary for parsed PSBT
+                height: NaN,
+                confirmations: NaN,
                 txid,
                 vout,
                 value,
@@ -669,6 +692,26 @@ export class CoinWallet {
         coinTx.txid = await this.provider.broadcastTransaction(signed.toHex());
 
         return coinTx;
+    }
+
+    async sendConsolidations({
+        customFeePerByte,
+        cachedBalance,
+        requiredConfirmations,
+    }: populateOptions = {}) {
+        const txs = await this.populateConsolidation({
+            customFeePerByte,
+            cachedBalance,
+            requiredConfirmations,
+        });
+
+        for (let i = 0; i < txs.length; ++i) {
+            const tx = this.signTransaction(txs[i].psbt as Psbt);
+
+            txs[i].txid = await this.provider.broadcastTransaction(tx.toHex());
+        }
+
+        return txs;
     }
 }
 

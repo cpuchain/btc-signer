@@ -63,6 +63,25 @@ export class CoinProvider {
         }
     }
 
+    async getBlockNumber() {
+        const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
+            method: 'GET',
+        });
+
+        const data = (await resp.json()) as {
+            error?: string;
+            blockbook?: {
+                bestHeight: number;
+            };
+        };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return Number(data.blockbook?.bestHeight);
+    }
+
     async getUnspent(
         address: string,
         scan: boolean = false,
@@ -100,6 +119,7 @@ export class CoinProvider {
                 utxo.value = Number(utxo.value);
 
                 // Pending UTXO would be NaN and would sorted first
+                // blockbook always return confirmations as well
                 utxo.height = Number(utxo.height);
 
                 return utxo;
@@ -108,7 +128,7 @@ export class CoinProvider {
                 if (a.height === b.height) {
                     return a.vout - b.vout;
                 }
-                return Number(a.height) - Number(b.height);
+                return a.height - b.height;
             });
     }
 
@@ -202,7 +222,20 @@ export class MempoolProvider extends CoinProvider {
         }
     }
 
-    async getUnspent(address: string): Promise<Array<UTXO>> {
+    async getBlockNumber() {
+        const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
+            method: 'GET',
+        });
+
+        // API throws whatever reason
+        if (!resp.ok) {
+            throw new Error(await resp.text());
+        }
+
+        return Number(await resp.text());
+    }
+
+    private async getUtxoInternal(address: string) {
         const resp = await fetch(
             `${this.backend}/api/address/${address}/utxo`,
             {
@@ -216,17 +249,30 @@ export class MempoolProvider extends CoinProvider {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const utxos = (await resp.json()) as Array<any>;
+        return (await resp.json()) as Array<any>;
+    }
+
+    async getUnspent(address: string): Promise<Array<UTXO>> {
+        const [blockHeight, utxos] = await Promise.all([
+            this.getBlockNumber(),
+            this.getUtxoInternal(address),
+        ]);
 
         // Return UTXOs in an ascending order as we want to spend the oldest coins first
         return utxos
-            .map((utxo) => ({
-                txid: utxo.txid,
-                vout: utxo.vout,
+            .map((utxo) => {
                 // Pending UTXO would be NaN and would sorted first
-                height: Number(utxo.status?.block_height),
-                value: Number(utxo.value),
-            }))
+                const height = Number(utxo.status?.block_height);
+                const confirmations = height ? blockHeight - height + 1 : 0;
+
+                return {
+                    txid: utxo.txid,
+                    vout: utxo.vout,
+                    height,
+                    confirmations,
+                    value: Number(utxo.value),
+                };
+            })
             .sort((a, b) => {
                 if (a.height === b.height) {
                     return a.vout - b.vout;

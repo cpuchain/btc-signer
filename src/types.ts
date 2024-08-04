@@ -47,8 +47,8 @@ export interface Output {
 }
 
 export type UTXO = Input & {
-    height?: number;
-    confirmations?: number;
+    height: number;
+    confirmations: number;
     address?: string;
     addressIndex?: number;
     path?: string;

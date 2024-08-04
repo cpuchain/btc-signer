@@ -10,6 +10,7 @@ export interface populateOptions {
     spendAll?: boolean;
     deductFees?: boolean;
     cachedBalance?: CoinBalance;
+    requiredConfirmations?: number;
 }
 export declare function getInputs(utxos: Array<UTXO>, outputs: Array<Output>, spendAll?: boolean): UTXO[];
 export interface CoinTXProperties {
@@ -90,14 +91,15 @@ export declare class CoinWallet {
         address: string;
         isPub?: boolean;
     };
-    getBalance(): Promise<CoinBalance>;
+    getBalance(requiredConfirmations?: number): Promise<CoinBalance>;
     getMaxSpendable({ changeAddress, customFeePerByte, cachedBalance, }?: populateOptions): Promise<number>;
-    populateTransaction(outputs: Array<Output>, { changeAddress, customFeePerByte, spendAll, deductFees, cachedBalance, }?: populateOptions): Promise<CoinTX>;
+    populateTransaction(outputs: Array<Output>, { changeAddress, customFeePerByte, spendAll, deductFees, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX>;
     populatePsbt(coinTx: CoinTX): Promise<void>;
-    populateConsolidation({ customFeePerByte, cachedBalance, }?: populateOptions): Promise<CoinTX[]>;
+    populateConsolidation({ customFeePerByte, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX[]>;
     parseTransaction(psbtHex: string): CoinTX;
     signTransaction(psbt: Psbt, keyIndex?: number): Transaction;
     sendTransaction(outputs: Array<Output>, populateOptions?: populateOptions): Promise<CoinTX>;
+    sendConsolidations({ customFeePerByte, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX[]>;
 }
 export declare class MnemonicWallet extends CoinWallet {
     mnemonic: string;
