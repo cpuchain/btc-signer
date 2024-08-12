@@ -1,18 +1,21 @@
 import { opcodes, payments, Network } from 'bitcoinjs-lib';
-import bigDecimal from 'js-big-decimal';
+import BigNumber from 'bignumber.js';
 
 import type { addrType } from './types';
 
+// todo: drop number for sats
 export function formatCoins(
     amount: bigint | number | string,
     decimals: number = 8,
 ) {
-    return bigDecimal.divide(amount, 10 ** decimals);
+    return BigNumber(String(amount)).div(10 ** decimals).toString();
 }
 
 export function parseCoins(amount: number | string, decimals: number = 8) {
     // todo: return bigint for sat
-    return Math.floor(Number(amount) * 10 ** decimals);
+    return BigNumber(amount)
+        .times(10 ** decimals)
+        .toNumber();
 }
 
 export function getDerivation(addrType: addrType) {

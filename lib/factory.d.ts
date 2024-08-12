@@ -1,3 +1,4 @@
+export { BigNumber } from 'bignumber.js';
 export { Buffer } from 'buffer';
 export * as bitcoin from 'bitcoinjs-lib';
 export declare const bip32: import("bip32").BIP32API;

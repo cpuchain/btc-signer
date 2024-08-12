@@ -5,6 +5,7 @@ import * as ecc from '@bitcoinerlab/secp256k1';
 
 initEccLib(ecc);
 
+export { BigNumber } from 'bignumber.js';
 export { Buffer } from 'buffer';
 export * as bitcoin from 'bitcoinjs-lib';
 export const bip32 = BIP32Factory(ecc);

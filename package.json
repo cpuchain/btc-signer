@@ -1,6 +1,6 @@
 {
     "name": "btc-signer",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "description": "Easy to use Blockbook Provider and Signer object for Bitcoin-like Coins",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
@@ -27,14 +27,14 @@
     ],
     "dependencies": {
         "@bitcoinerlab/secp256k1": "^1.1.1",
+        "bignumber.js": "^9.1.2",
         "bip32": "^4.0.0",
         "bip39": "^3.1.0",
         "bitcoinjs-lib": "^6.1.6",
         "bs58check": "^4.0.0",
         "buffer": "^6.0.3",
         "coininfo": "^5.2.1",
-        "ecpair": "^2.1.0",
-        "js-big-decimal": "^2.0.7"
+        "ecpair": "^2.1.0"
     },
     "devDependencies": {
         "@types/node": "^20.14.9",
