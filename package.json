@@ -39,7 +39,7 @@
         "ecpair": "^3.0.0"
     },
     "devDependencies": {
-        "@cpuchain/eslint": "^1.0.4",
+        "@cpuchain/eslint": "^1.0.5",
         "@types/node": "^22.14.1",
         "esbuild-loader": "^4.3.0",
         "node-polyfill-webpack-plugin": "^4.1.0",

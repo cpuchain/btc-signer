@@ -9,7 +9,7 @@
   dependencies:
     "@noble/curves" "^1.7.0"
 
-"@cpuchain/eslint@^1.0.4":
+"@cpuchain/eslint@^1.0.5":
   version "1.0.5"
   resolved "https://registry.yarnpkg.com/@cpuchain/eslint/-/eslint-1.0.5.tgz#7d0f202f2c4fb73b3c258fed3c2d96e7d3cdba05"
   integrity sha512-BiPt7epCiPd0yy52Y2Vq7kjLFeyyapEspZ2W6r3Wl9cjRuuphPNFTPQBrErRFUDSYtddfRWXhWJTDRSnwh21rg==
