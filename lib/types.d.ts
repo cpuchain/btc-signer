@@ -10,7 +10,7 @@ export declare const electrumKeys: {
     p2pkh: string;
 };
 export type addrType = keyof typeof electrumKeys;
-export declare const addrTypes: Array<addrType>;
+export declare const addrTypes: addrType[];
 export type CoinInfo = Network & {
     versions: {
         bip44: number;

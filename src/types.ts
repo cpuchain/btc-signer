@@ -13,12 +13,7 @@ export const electrumKeys = {
 
 export type addrType = keyof typeof electrumKeys;
 
-export const addrTypes: Array<addrType> = [
-    'legacy',
-    'segwit',
-    'bech32',
-    'taproot',
-];
+export const addrTypes: addrType[] = ['legacy', 'segwit', 'bech32', 'taproot'];
 
 export type CoinInfo = Network & {
     versions: {

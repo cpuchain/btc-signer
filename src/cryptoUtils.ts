@@ -1,7 +1,7 @@
 import { webcrypto } from 'crypto';
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
-declare module globalThis {
+declare namespace globalThis {
     // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
     var window: any;
     // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
@@ -18,11 +18,9 @@ export const isNode =
         }
     ).browser && typeof globalThis.window === 'undefined';
 
-export const crypto = isNode
-    ? webcrypto
-    : (globalThis.crypto as typeof webcrypto);
+export const crypto = isNode ? webcrypto : (globalThis.crypto as typeof webcrypto);
 
-export function getRandomBytes(bytesLength: number = 32) {
+export function getRandomBytes(bytesLength = 32) {
     return crypto.getRandomValues(new Uint8Array(bytesLength));
 }
 
@@ -33,18 +31,14 @@ export function hexToBytes(hexString: string) {
     if (hexString.length % 2 !== 0) {
         hexString = '0' + hexString;
     }
-    return Uint8Array.from(
-        hexString.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || [],
-    );
+    return Uint8Array.from(hexString.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []);
 }
 
 export function binaryToBytes(binaryString: string) {
     while (binaryString.length % 8 != 0) {
         binaryString = '0' + binaryString;
     }
-    return new Uint8Array(
-        binaryString.match(/(.{1,8})/g)?.map((bin) => parseInt(bin, 2)) || [],
-    );
+    return new Uint8Array(binaryString.match(/(.{1,8})/g)?.map((bin) => parseInt(bin, 2)) || []);
 }
 
 export function base64ToBytes(baseString: string) {
@@ -71,30 +65,22 @@ export function bytesToBinary(bytes: Uint8Array) {
 }
 
 export function bytesToBase64(bytes: Uint8Array) {
-    return btoa(
-        bytes.reduce((data, byte) => data + String.fromCharCode(byte), ''),
-    );
+    return btoa(bytes.reduce((data, byte) => data + String.fromCharCode(byte), ''));
 }
 
-export async function digest(input: Uint8Array, algorithm: string = 'SHA-512') {
+export async function digest(input: Uint8Array, algorithm = 'SHA-512') {
     return new Uint8Array(await crypto.subtle.digest(algorithm, input));
 }
 
 // Repeat sha hex string operation
 // Compatible with coinb.in wallet
-export async function repeatDigest(
-    input: string,
-    count: number = 1,
-    algorithm: string = 'SHA-512',
-) {
+export async function repeatDigest(input: string, count = 1, algorithm = 'SHA-512') {
     // Prevent buffer output
     if (count < 1) {
         throw new Error('Invalid sha count');
     }
     for (let i = 0; i < count; ++i) {
-        input = bytesToHex(
-            await digest(textEncoder.encode(input), algorithm),
-        ).substring(2);
+        input = bytesToHex(await digest(textEncoder.encode(input), algorithm)).substring(2);
     }
     return '0x' + input;
 }
@@ -102,17 +88,11 @@ export async function repeatDigest(
 export async function pbkdf2(
     input: Uint8Array,
     salt: Uint8Array,
-    iterations: number = 2048,
-    byteLength: number = 512,
-    hash: string = 'SHA-512',
+    iterations = 2048,
+    byteLength = 512,
+    hash = 'SHA-512',
 ) {
-    const baseKey = await crypto.subtle.importKey(
-        'raw',
-        input,
-        'PBKDF2',
-        false,
-        ['deriveBits'],
-    );
+    const baseKey = await crypto.subtle.importKey('raw', input, 'PBKDF2', false, ['deriveBits']);
 
     const arrayBuffer = await crypto.subtle.deriveBits(
         {
@@ -135,10 +115,10 @@ export async function pbkdf2(
 export async function getKeyAndIv(
     password: string,
     salt: Uint8Array,
-    hash: string = 'SHA-512',
-    iterations: number = 10000,
-    cipher: string = 'AES-CBC',
-    cipherLength: number = 256,
+    hash = 'SHA-512',
+    iterations = 10000,
+    cipher = 'AES-CBC',
+    cipherLength = 256,
 ) {
     const enc = textEncoder.encode(password);
 
@@ -146,13 +126,10 @@ export async function getKeyAndIv(
 
     const iv = keys.slice(cipherLength / 8);
 
-    const key = await crypto.subtle.importKey(
-        'raw',
-        keys.slice(0, cipherLength / 8),
-        cipher,
-        false,
-        ['encrypt', 'decrypt'],
-    );
+    const key = await crypto.subtle.importKey('raw', keys.slice(0, cipherLength / 8), cipher, false, [
+        'encrypt',
+        'decrypt',
+    ]);
 
     return { iv, key };
 }
@@ -161,22 +138,15 @@ export async function encryptString(
     plainString: string,
     password: string,
     saltArray?: Uint8Array,
-    hash: string = 'SHA-512',
-    iterations: number = 10000,
-    cipher: string = 'AES-CBC',
-    cipherLength: number = 256,
-    saltSize: number = 8,
+    hash = 'SHA-512',
+    iterations = 10000,
+    cipher = 'AES-CBC',
+    cipherLength = 256,
+    saltSize = 8,
 ) {
     const salt = saltArray || getRandomBytes(saltSize);
 
-    const { iv, key } = await getKeyAndIv(
-        password,
-        salt,
-        hash,
-        iterations,
-        cipher,
-        cipherLength,
-    );
+    const { iv, key } = await getKeyAndIv(password, salt, hash, iterations, cipher, cipherLength);
 
     const cipherBuffer = new Uint8Array(
         await crypto.subtle.encrypt(
@@ -191,9 +161,7 @@ export async function encryptString(
 
     const prefix = textEncoder.encode('Salted__');
 
-    const enc = new Uint8Array(
-        prefix.byteLength + salt.byteLength + cipherBuffer.byteLength,
-    );
+    const enc = new Uint8Array(prefix.byteLength + salt.byteLength + cipherBuffer.byteLength);
     enc.set(prefix, 0);
     enc.set(salt, prefix.byteLength);
     enc.set(cipherBuffer, prefix.byteLength + salt.byteLength);
@@ -204,11 +172,11 @@ export async function encryptString(
 export async function decryptString(
     encryptedString: string,
     password: string,
-    hash: string = 'SHA-512',
-    iterations: number = 10000,
-    cipher: string = 'AES-CBC',
-    cipherLength: number = 256,
-    saltSize: number = 8,
+    hash = 'SHA-512',
+    iterations = 10000,
+    cipher = 'AES-CBC',
+    cipherLength = 256,
+    saltSize = 8,
 ) {
     // 1. Separate ciphertext, salt, and iv
     const enc = base64ToBytes(encryptedString);
@@ -228,14 +196,7 @@ export async function decryptString(
     }
 
     // 2. Determine key using PBKDF2
-    const { iv, key } = await getKeyAndIv(
-        password,
-        salt,
-        hash,
-        iterations,
-        cipher,
-        cipherLength,
-    );
+    const { iv, key } = await getKeyAndIv(password, salt, hash, iterations, cipher, cipherLength);
 
     try {
         const decrypted = await crypto.subtle.decrypt(

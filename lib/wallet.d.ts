@@ -4,6 +4,7 @@ import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
 import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Output, UTXO } from './types';
+export declare const RBF_INPUT_SEQUENCE = 4294967293;
 export interface populateOptions {
     changeAddress?: string;
     customFeePerByte?: number;
@@ -12,23 +13,23 @@ export interface populateOptions {
     cachedBalance?: CoinBalance;
     requiredConfirmations?: number;
 }
-export declare function getInputs(utxos: Array<UTXO>, outputs: Array<Output>, spendAll?: boolean): UTXO[];
+export declare function getInputs(utxos: UTXO[], outputs: Output[], spendAll?: boolean): UTXO[];
 export interface CoinTXProperties {
     psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<UTXO>;
+    inputs: UTXO[];
     outputAmounts: string;
-    outputs: Array<Output>;
+    outputs: Output[];
     vBytes: number;
 }
 export declare class CoinTX {
     psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<UTXO>;
+    inputs: UTXO[];
     outputAmounts: string;
-    outputs: Array<Output>;
+    outputs: Output[];
     vBytes: number;
     txid?: string;
     constructor(props: CoinTXProperties);
@@ -48,13 +49,13 @@ export declare class CoinTX {
 }
 export interface CoinBalanceProperties {
     feePerByte: number;
-    utxos: Array<UTXO>;
+    utxos: UTXO[];
     utxoBalance: number;
     coinbase: number;
 }
 export declare class CoinBalance {
     feePerByte: number;
-    utxos: Array<UTXO>;
+    utxos: UTXO[];
     utxoBalance: number;
     coinbase: number;
     constructor(props: CoinBalanceProperties);
@@ -85,20 +86,20 @@ export declare class CoinWallet {
         privateKey: string;
         privateKeyWithPrefix: string;
     };
-    getBip32Derivation(index?: number): Array<Bip32Derivation | TapBip32Derivation>;
+    getBip32Derivation(index?: number): (Bip32Derivation | TapBip32Derivation)[];
     getChangeAddress(): string;
     getUtxoAddress(): {
         address: string;
         isPub?: boolean;
     };
     getBalance(requiredConfirmations?: number): Promise<CoinBalance>;
-    getMaxSpendable({ changeAddress, customFeePerByte, cachedBalance, }?: populateOptions): Promise<number>;
-    populateTransaction(outputs: Array<Output>, { changeAddress, customFeePerByte, spendAll, deductFees, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX>;
+    getMaxSpendable({ changeAddress, customFeePerByte, cachedBalance }?: populateOptions): Promise<number>;
+    populateTransaction(outputs: Output[], { changeAddress, customFeePerByte, spendAll, deductFees, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX>;
     populatePsbt(coinTx: CoinTX): Promise<void>;
     populateConsolidation({ customFeePerByte, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX[]>;
     parseTransaction(psbtHex: string): CoinTX;
     signTransaction(psbt: Psbt, keyIndex?: number): Transaction;
-    sendTransaction(outputs: Array<Output>, populateOptions?: populateOptions): Promise<CoinTX>;
+    sendTransaction(outputs: Output[], populateOptions?: populateOptions): Promise<CoinTX>;
     sendConsolidations({ customFeePerByte, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX[]>;
 }
 export declare class MnemonicWallet extends CoinWallet {
@@ -116,7 +117,7 @@ export declare class MnemonicWallet extends CoinWallet {
         isPub: boolean;
     };
     getKey(index?: number): BIP32Interface;
-    getBip32Derivation(index?: number): Array<Bip32Derivation | TapBip32Derivation>;
+    getBip32Derivation(index?: number): (Bip32Derivation | TapBip32Derivation)[];
     signTransaction(psbt: Psbt): Transaction;
 }
 export interface ViewKey {
@@ -127,7 +128,7 @@ export interface ViewKey {
 export declare class VoidWallet extends CoinWallet {
     constructor(provider: CoinProvider, config: WalletConfig);
     getKey(index?: number): {
-        publicKey: Buffer;
+        publicKey: Buffer<ArrayBuffer>;
         toWIF: () => string;
         tweak: () => void;
     };

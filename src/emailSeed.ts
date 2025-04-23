@@ -29,12 +29,7 @@ export function generateHexWithIdLegacy(email: string, pass: string) {
     return repeatDigest(s, 52, 'SHA-256');
 }
 
-export async function generateHexWithId(
-    id: string,
-    password: string,
-    thirdParams: Array<string> = [],
-    nonce: number = 0,
-) {
+export async function generateHexWithId(id: string, password: string, thirdParams: string[] = [], nonce = 0) {
     if (id.length < 5 || password.length < 5) {
         throw new Error('Invalid id or password length, must longer than 5');
     }
@@ -49,10 +44,7 @@ export async function generateHexWithId(
     if (thirdParams.length) {
         s += thirdParams.join('|') + '|';
     }
-    s +=
-        s.length +
-        '|!@' +
-        `${(password.length * 7 + id.length + thirdParams.length) * 7}`;
+    s += s.length + '|!@' + `${(password.length * 7 + id.length + thirdParams.length) * 7}`;
     const regchars = password.match(/[a-z]+/g)?.length || 1;
     const regupchars = password.match(/[A-Z]+/g)?.length || 1;
     const regnums = password.match(/[0-9]+/g)?.length || 1;
@@ -74,10 +66,7 @@ export async function generateHexWithId(
         ),
     );
 
-    const hashedString = await repeatDigest(
-        encryptedHexString.substring(2),
-        50 + nonce,
-    );
+    const hashedString = await repeatDigest(encryptedHexString.substring(2), 50 + nonce);
 
     return hashedString;
 }
@@ -128,14 +117,9 @@ export async function getMnemonic(entropy: string, mnemonicLength?: number) {
 }
 
 export async function getRandomMnemonic(mnemonicLength?: number) {
-    const entropy = bytesToHex(
-        crypto.getRandomValues(new Uint8Array(32)),
-    ).substring(2);
+    const entropy = bytesToHex(crypto.getRandomValues(new Uint8Array(32))).substring(2);
 
-    const { newEntropy, mnemonic, seed } = await getMnemonic(
-        entropy,
-        mnemonicLength,
-    );
+    const { newEntropy, mnemonic, seed } = await getMnemonic(entropy, mnemonicLength);
 
     return {
         entropy: newEntropy || entropy,
@@ -147,9 +131,9 @@ export async function getRandomMnemonic(mnemonicLength?: number) {
 export async function generateMnemonicWithId(
     id: string,
     password: string,
-    thirdParams: Array<string> = [],
+    thirdParams: string[] = [],
     mnemonicLength?: number,
-    nonce: number = 0,
+    nonce = 0,
 ) {
     const hex = await generateHexWithId(id, password, thirdParams, nonce);
 
@@ -157,13 +141,8 @@ export async function generateMnemonicWithId(
     const entropy = hex.slice(prefixLength, prefixLength + 64);
     const entropy2 = hex.slice(prefixLength + 64);
 
-    const [
-        { newEntropy, mnemonic, seed },
-        { newEntropy: newEntropy2, mnemonic: mnemonic2, seed: seed2 },
-    ] = await Promise.all([
-        getMnemonic(entropy, mnemonicLength),
-        getMnemonic(entropy2, mnemonicLength),
-    ]);
+    const [{ newEntropy, mnemonic, seed }, { newEntropy: newEntropy2, mnemonic: mnemonic2, seed: seed2 }] =
+        await Promise.all([getMnemonic(entropy, mnemonicLength), getMnemonic(entropy2, mnemonicLength)]);
 
     return {
         hex,

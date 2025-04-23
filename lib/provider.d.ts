@@ -20,16 +20,16 @@ export declare class CoinProvider {
     constructor(config: ProviderConfig);
     estimateFee(): Promise<number>;
     getBlockNumber(): Promise<number>;
-    getUnspent(address: string, scan?: boolean): Promise<Array<UTXO>>;
-    getTransactions(txs: Array<string>): Promise<Array<TX>>;
+    getUnspent(address: string, scan?: boolean): Promise<UTXO[]>;
+    getTransactions(txs: string[]): Promise<TX[]>;
     broadcastTransaction(signedTx: string): Promise<string>;
 }
 export declare class MempoolProvider extends CoinProvider {
     estimateFee(): Promise<number>;
     getBlockNumber(): Promise<number>;
     private getUtxoInternal;
-    getUnspent(address: string): Promise<Array<UTXO>>;
-    getTransactions(txs: Array<string>): Promise<Array<TX>>;
+    getUnspent(address: string): Promise<UTXO[]>;
+    getTransactions(txs: string[]): Promise<TX[]>;
     broadcastTransaction(signedTx: string): Promise<string>;
 }
 export default CoinProvider;

@@ -11,10 +11,7 @@ import { generateMnemonic, mnemonicToSeedSync } from 'bip39';
 
 import type { BIP32Interface } from 'bip32';
 import type { ECPairInterface } from 'ecpair';
-import type {
-    Bip32Derivation,
-    TapBip32Derivation,
-} from 'bip174/src/lib/interfaces';
+import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
 import { chunk, checkHex } from './utils';
 import {
     parseCoins,
@@ -31,6 +28,8 @@ import { bip32, ECPair } from './factory';
 import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Output, UTXO } from './types';
 
+export const RBF_INPUT_SEQUENCE = 0xfffffffd;
+
 export interface populateOptions {
     changeAddress?: string;
     customFeePerByte?: number;
@@ -40,11 +39,7 @@ export interface populateOptions {
     requiredConfirmations?: number;
 }
 
-export function getInputs(
-    utxos: Array<UTXO>,
-    outputs: Array<Output>,
-    spendAll: boolean = false,
-) {
+export function getInputs(utxos: UTXO[], outputs: Output[], spendAll = false) {
     // Throw if the outputs are not specified but this is not a consolidation nor balance calculation
     if (!outputs.length && !spendAll) {
         throw new Error('getInputs: spendAll not specified but no outputs!');
@@ -69,7 +64,7 @@ export function getInputs(
             inputs: [],
         } as {
             amounts: number;
-            inputs: Array<UTXO>;
+            inputs: UTXO[];
         },
     );
 
@@ -87,9 +82,9 @@ export interface CoinTXProperties {
     psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<UTXO>;
+    inputs: UTXO[];
     outputAmounts: string;
-    outputs: Array<Output>;
+    outputs: Output[];
     vBytes: number;
 }
 
@@ -97,9 +92,9 @@ export class CoinTX {
     psbt?: Psbt;
     fees: string;
     inputAmounts: string;
-    inputs: Array<UTXO>;
+    inputs: UTXO[];
     outputAmounts: string;
-    outputs: Array<Output>;
+    outputs: Output[];
     vBytes: number;
 
     txid?: string;
@@ -133,14 +128,14 @@ export class CoinTX {
 
 export interface CoinBalanceProperties {
     feePerByte: number;
-    utxos: Array<UTXO>;
+    utxos: UTXO[];
     utxoBalance: number;
     coinbase: number;
 }
 
 export class CoinBalance {
     feePerByte: number;
-    utxos: Array<UTXO>;
+    utxos: UTXO[];
     utxoBalance: number;
     coinbase: number;
 
@@ -172,11 +167,7 @@ export class CoinWallet {
     privateKey: string;
     privateKeyWithPrefix: string;
 
-    constructor(
-        provider: CoinProvider,
-        config: WalletConfig,
-        generateRandom: boolean = true,
-    ) {
+    constructor(provider: CoinProvider, config: WalletConfig, generateRandom = true) {
         this.provider = provider;
 
         // Fallback to default bitcoin mainnet
@@ -188,9 +179,7 @@ export class CoinWallet {
         };
 
         // Disable segwit address on non segwit networks like dogecoin
-        this.addrType = this.network.bech32
-            ? config.addrType || 'taproot'
-            : 'legacy';
+        this.addrType = this.network.bech32 ? config.addrType || 'taproot' : 'legacy';
 
         const keyPair = config.privateKey
             ? ECPair.fromWIF(config.privateKey, this.network)
@@ -198,25 +187,15 @@ export class CoinWallet {
               ? ECPair.makeRandom({ network: this.network })
               : null;
 
-        this.address = keyPair
-            ? (getAddress(
-                  keyPair.publicKey,
-                  this.addrType,
-                  this.network,
-              ) as string)
-            : '';
-        this.publicKey = keyPair ? keyPair.publicKey.toString('hex') : '';
+        const pubKey = Buffer.from(keyPair?.publicKey || []);
+
+        this.address = keyPair ? (getAddress(pubKey, this.addrType, this.network) as string) : '';
+        this.publicKey = keyPair ? pubKey.toString('hex') : '';
         this.privateKey = keyPair ? keyPair.toWIF() : '';
-        this.privateKeyWithPrefix = keyPair
-            ? `${electrumKeys[this.addrType]}:${this.privateKey}`
-            : '';
+        this.privateKeyWithPrefix = keyPair ? `${electrumKeys[this.addrType]}:${this.privateKey}` : '';
     }
 
-    static fromBuffer(
-        provider: CoinProvider,
-        config: WalletConfig,
-        bufferKey: Buffer,
-    ) {
+    static fromBuffer(provider: CoinProvider, config: WalletConfig, bufferKey: Buffer) {
         const network = config.network || networks.bitcoin;
 
         const keyPair = ECPair.fromPrivateKey(bufferKey, { network });
@@ -228,33 +207,26 @@ export class CoinWallet {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getKey(index: number = 0): ECPairInterface | BIP32Interface | ViewKey {
+    getKey(index = 0): ECPairInterface | BIP32Interface | ViewKey {
         if (!this.privateKey) {
             throw new Error('View only wallet or privateKey not available');
         }
         return ECPair.fromWIF(this.privateKey, this.network);
     }
 
-    getKeyInfo(index: number = 0) {
+    getKeyInfo(index = 0) {
         const keyPair = this.getKey(index);
+        const pubKey = Buffer.from(keyPair?.publicKey || []);
 
-        this.address = getAddress(
-            keyPair.publicKey,
-            this.addrType,
-            this.network,
-        ) as string;
-        this.publicKey = keyPair.publicKey.toString('hex');
+        this.address = getAddress(pubKey, this.addrType, this.network) as string;
+        this.publicKey = pubKey.toString('hex');
         this.privateKey = keyPair.toWIF();
         this.privateKeyWithPrefix = `${electrumKeys[this.addrType]}:${this.privateKey}`;
 
         return {
             keyPair,
-            address: getAddress(
-                keyPair.publicKey,
-                this.addrType,
-                this.network,
-            ) as string,
-            publicKey: keyPair.publicKey.toString('hex'),
+            address: getAddress(pubKey, this.addrType, this.network) as string,
+            publicKey: pubKey.toString('hex'),
             privateKey: keyPair.toWIF(),
             privateKeyWithPrefix: `${electrumKeys[this.addrType]}:${this.privateKey}`,
         };
@@ -262,8 +234,8 @@ export class CoinWallet {
 
     getBip32Derivation(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        index: number = 0,
-    ): Array<Bip32Derivation | TapBip32Derivation> {
+        index = 0,
+    ): (Bip32Derivation | TapBip32Derivation)[] {
         return [];
     }
 
@@ -291,11 +263,7 @@ export class CoinWallet {
         ]);
 
         const utxos = unspents.filter((utxo) => {
-            if (
-                utxo.coinbase &&
-                utxo.confirmations &&
-                utxo.confirmations < 100
-            ) {
+            if (utxo.coinbase && utxo.confirmations && utxo.confirmations < 100) {
                 coinbase += utxo.value;
                 return false;
             }
@@ -303,8 +271,7 @@ export class CoinWallet {
             // Filter unconfirmed utxos or confirmations lower than required ones
             if (
                 requiredConfirmations &&
-                (!utxo.confirmations ||
-                    utxo.confirmations < requiredConfirmations)
+                (!utxo.confirmations || utxo.confirmations < requiredConfirmations)
             ) {
                 return false;
             }
@@ -321,11 +288,7 @@ export class CoinWallet {
         });
     }
 
-    async getMaxSpendable({
-        changeAddress,
-        customFeePerByte,
-        cachedBalance,
-    }: populateOptions = {}) {
+    async getMaxSpendable({ changeAddress, customFeePerByte, cachedBalance }: populateOptions = {}) {
         const { inputAmounts, fees } = await this.populateTransaction([], {
             changeAddress,
             customFeePerByte,
@@ -338,7 +301,7 @@ export class CoinWallet {
     }
 
     async populateTransaction(
-        outputs: Array<Output>,
+        outputs: Output[],
         {
             changeAddress,
             customFeePerByte,
@@ -348,8 +311,7 @@ export class CoinWallet {
             requiredConfirmations,
         }: populateOptions = {},
     ) {
-        const balance =
-            cachedBalance || (await this.getBalance(requiredConfirmations));
+        const balance = cachedBalance || (await this.getBalance(requiredConfirmations));
 
         const feePerByte = customFeePerByte || balance.feePerByte;
         const inputs = getInputs(balance.utxos, outputs, spendAll);
@@ -389,9 +351,7 @@ export class CoinWallet {
 
             outputAmounts += output.value;
             outputBytes += output.bytes = getBytes(
-                getScriptType(
-                    bitcoinAddress.toOutputScript(output.address, network),
-                ),
+                getScriptType(bitcoinAddress.toOutputScript(output.address, network)),
                 false,
             );
         });
@@ -422,12 +382,7 @@ export class CoinWallet {
             const output = {
                 address: changeAddr,
                 value: change,
-                bytes: getBytes(
-                    getScriptType(
-                        bitcoinAddress.toOutputScript(changeAddr, network),
-                    ),
-                    false,
-                ),
+                bytes: getBytes(getScriptType(bitcoinAddress.toOutputScript(changeAddr, network)), false),
             };
             const outputFee = output.bytes * feePerByte;
 
@@ -457,9 +412,7 @@ export class CoinWallet {
 
         const txs =
             this.addrType === 'legacy'
-                ? await this.provider.getTransactions([
-                      ...new Set(inputs.map((t) => t.txid)),
-                  ])
+                ? await this.provider.getTransactions([...new Set(inputs.map((t) => t.txid))])
                 : [];
 
         const { addrType, network } = this;
@@ -467,21 +420,13 @@ export class CoinWallet {
         const psbt = new Psbt({ network });
 
         inputs.forEach((input) => {
-            const {
-                txid: hash,
-                vout: index,
-                value,
-                address,
-                addressIndex,
-            } = input;
+            const { txid: hash, vout: index, value, address, addressIndex } = input;
 
-            const script = bitcoinAddress.toOutputScript(
-                address || (this.address as string),
-                network,
-            );
+            const script = bitcoinAddress.toOutputScript(address || (this.address as string), network);
 
             const key = this.getKey(addressIndex);
-            const tapInternalKey = key.publicKey.slice(1, 33);
+            const pubkey = Buffer.from(key?.publicKey || []);
+            const tapInternalKey = pubkey.slice(1, 33);
 
             const bip32Derivation = this.getBip32Derivation(addressIndex);
 
@@ -489,6 +434,7 @@ export class CoinWallet {
                 psbt.addInput({
                     hash,
                     index,
+                    sequence: RBF_INPUT_SEQUENCE,
                     witnessUtxo: {
                         script,
                         value,
@@ -500,6 +446,7 @@ export class CoinWallet {
                 psbt.addInput({
                     hash,
                     index,
+                    sequence: RBF_INPUT_SEQUENCE,
                     witnessUtxo: {
                         script,
                         value,
@@ -508,12 +455,13 @@ export class CoinWallet {
                 });
             } else if (addrType === 'segwit') {
                 const { output: redeemScript } = payments.p2wpkh({
-                    pubkey: key.publicKey,
+                    pubkey,
                     network,
                 });
                 psbt.addInput({
                     hash,
                     index,
+                    sequence: RBF_INPUT_SEQUENCE,
                     witnessUtxo: {
                         script,
                         value,
@@ -530,6 +478,7 @@ export class CoinWallet {
                 psbt.addInput({
                     hash,
                     index,
+                    sequence: RBF_INPUT_SEQUENCE,
                     nonWitnessUtxo: Buffer.from(tx.hex, 'hex'),
                     bip32Derivation,
                 });
@@ -567,8 +516,7 @@ export class CoinWallet {
         cachedBalance,
         requiredConfirmations,
     }: populateOptions = {}) {
-        const balance =
-            cachedBalance || (await this.getBalance(requiredConfirmations));
+        const balance = cachedBalance || (await this.getBalance(requiredConfirmations));
 
         const feePerByte = customFeePerByte || balance.feePerByte;
         const inputs = chunk(balance.utxos, 500);
@@ -580,10 +528,7 @@ export class CoinWallet {
                     cachedBalance: new CoinBalance({
                         feePerByte,
                         utxos: input,
-                        utxoBalance: input.reduce(
-                            (acc, curr) => acc + curr.value,
-                            0,
-                        ),
+                        utxoBalance: input.reduce((acc, curr) => acc + curr.value, 0),
                         coinbase: 0,
                     }),
                 });
@@ -608,16 +553,12 @@ export class CoinWallet {
         const inputs = psbt.txInputs.map((input, index) => {
             const txInput = psbt.data.inputs[index];
             const nonWitnessTx = txInput.nonWitnessUtxo
-                ? Transaction.fromBuffer(
-                      txInput.nonWitnessUtxo as Buffer,
-                      false,
-                  )
+                ? Transaction.fromBuffer(txInput.nonWitnessUtxo as Buffer, false)
                 : undefined;
 
             const txid = input.hash.toString('hex');
             const vout = input.index;
-            const value = (txInput.witnessUtxo?.value ||
-                nonWitnessTx?.outs?.[vout]?.value) as number;
+            const value = (txInput.witnessUtxo?.value || nonWitnessTx?.outs?.[vout]?.value) as number;
 
             inputAmounts += value;
 
@@ -663,14 +604,13 @@ export class CoinWallet {
         });
     }
 
-    signTransaction(psbt: Psbt, keyIndex: number = 0) {
+    signTransaction(psbt: Psbt, keyIndex = 0) {
         const key = this.getKey(keyIndex);
+        const pubKey = Buffer.from(key.publicKey);
 
         // https://github.com/bitcoinjs/bitcoinjs-lib/blob/master/test/integration/taproot.spec.ts
-        const tapKey = key.publicKey.slice(1, 33);
-        const tweakedKey = key.tweak(
-            bitcoinCrypto.taggedHash('TapTweak', tapKey),
-        );
+        const tapKey = pubKey.slice(1, 33);
+        const tweakedKey = key.tweak(bitcoinCrypto.taggedHash('TapTweak', tapKey));
 
         psbt.signAllInputs(this.addrType !== 'taproot' ? key : tweakedKey);
 
@@ -679,10 +619,7 @@ export class CoinWallet {
         return psbt.extractTransaction();
     }
 
-    async sendTransaction(
-        outputs: Array<Output>,
-        populateOptions: populateOptions = {},
-    ) {
+    async sendTransaction(outputs: Output[], populateOptions: populateOptions = {}) {
         const coinTx = await this.populateTransaction(outputs, populateOptions);
 
         await this.populatePsbt(coinTx);
@@ -705,10 +642,10 @@ export class CoinWallet {
             requiredConfirmations,
         });
 
-        for (let i = 0; i < txs.length; ++i) {
-            const tx = this.signTransaction(txs[i].psbt as Psbt);
+        for (const tx of txs) {
+            const signedTx = this.signTransaction(tx.psbt as Psbt);
 
-            txs[i].txid = await this.provider.broadcastTransaction(tx.toHex());
+            tx.txid = await this.provider.broadcastTransaction(signedTx.toHex());
         }
 
         return txs;
@@ -720,16 +657,10 @@ export class MnemonicWallet extends CoinWallet {
     mnemonicIndex: number;
     onlySingle: boolean;
 
-    constructor(
-        provider: CoinProvider,
-        config: WalletConfig,
-        onlySingle: boolean = false,
-        generateRandom: boolean = true,
-    ) {
+    constructor(provider: CoinProvider, config: WalletConfig, onlySingle = false, generateRandom = true) {
         super(provider, config, false);
 
-        this.mnemonic =
-            config.mnemonic || (generateRandom ? generateMnemonic(128) : '');
+        this.mnemonic = config.mnemonic || (generateRandom ? generateMnemonic(128) : '');
         this.mnemonicIndex = config.mnemonicIndex || 0;
 
         this.onlySingle = onlySingle;
@@ -737,9 +668,8 @@ export class MnemonicWallet extends CoinWallet {
         this.setKey(this.mnemonicIndex);
     }
 
-    setKey(index: number = 0) {
-        const { address, publicKey, privateKey, privateKeyWithPrefix } =
-            this.getKeyInfo(index);
+    setKey(index = 0) {
+        const { address, publicKey, privateKey, privateKeyWithPrefix } = this.getKeyInfo(index);
 
         this.address = address;
         this.publicKey = publicKey;
@@ -752,10 +682,7 @@ export class MnemonicWallet extends CoinWallet {
     // Get Account Extended Public Key compatible with blockbook instance
     // Can cross-check with https://iancoleman.io/bip39/
     getPub() {
-        const root = bip32.fromSeed(
-            mnemonicToSeedSync(this.mnemonic),
-            this.network,
-        );
+        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
 
         const key = root.derivePath(
             `m/${getDerivation(this.addrType)}'/${this.network.versions.bip44 || 0}'/0'`,
@@ -789,28 +716,20 @@ export class MnemonicWallet extends CoinWallet {
         };
     }
 
-    getKey(index: number = 0) {
-        const root = bip32.fromSeed(
-            mnemonicToSeedSync(this.mnemonic),
-            this.network,
-        );
+    getKey(index = 0) {
+        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
 
         return root.derivePath(
             `m/${getDerivation(this.addrType)}'/${this.network.versions.bip44 || 0}'/0'/0/${index}`,
         );
     }
 
-    getBip32Derivation(
-        index: number = 0,
-    ): Array<Bip32Derivation | TapBip32Derivation> {
+    getBip32Derivation(index = 0): (Bip32Derivation | TapBip32Derivation)[] {
         if (this.onlySingle) {
             return super.getBip32Derivation(index);
         }
 
-        const root = bip32.fromSeed(
-            mnemonicToSeedSync(this.mnemonic),
-            this.network,
-        );
+        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
 
         const path = `m/${getDerivation(this.addrType)}'/${this.network.versions.bip44 || 0}'/0'/0/${index}`;
 
@@ -841,22 +760,15 @@ export class MnemonicWallet extends CoinWallet {
             return super.signTransaction(psbt, this.mnemonicIndex);
         }
 
-        const root = bip32.fromSeed(
-            mnemonicToSeedSync(this.mnemonic),
-            this.network,
-        );
+        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
 
         // https://github.com/snapdao/btcsnap/pull/140
         if (this.addrType === 'taproot') {
             psbt.data.inputs.forEach((txInput, index) => {
-                const derivation = (
-                    txInput.tapBip32Derivation as TapBip32Derivation[]
-                )[0];
+                const derivation = (txInput.tapBip32Derivation as TapBip32Derivation[])[0];
                 const key = root.derivePath(derivation.path);
                 const tapKey = key.publicKey.slice(1, 33);
-                const tweakedKey = key.tweak(
-                    bitcoinCrypto.taggedHash('TapTweak', tapKey),
-                );
+                const tweakedKey = key.tweak(bitcoinCrypto.taggedHash('TapTweak', tapKey));
 
                 psbt.signTaprootInput(index, tweakedKey);
             });
@@ -883,15 +795,11 @@ export class VoidWallet extends CoinWallet {
 
         this.publicKey = config.publicKey as string;
 
-        this.address = getAddress(
-            Buffer.from(this.publicKey, 'hex'),
-            this.addrType,
-            this.network,
-        ) as string;
+        this.address = getAddress(Buffer.from(this.publicKey, 'hex'), this.addrType, this.network) as string;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    getKey(index: number = 0) {
+    getKey(index = 0) {
         return {
             publicKey: Buffer.from(this.publicKey, 'hex'),
             toWIF: () => '',

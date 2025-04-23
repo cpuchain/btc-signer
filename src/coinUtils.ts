@@ -1,17 +1,16 @@
 import { opcodes, payments, Network } from 'bitcoinjs-lib';
-import BigNumber from 'bignumber.js';
+import { BigNumber } from 'bignumber.js';
 
 import type { addrType } from './types';
 
 // todo: drop number for sats
-export function formatCoins(
-    amount: bigint | number | string,
-    decimals: number = 8,
-) {
-    return BigNumber(String(amount)).div(10 ** decimals).toString();
+export function formatCoins(amount: bigint | number | string, decimals = 8) {
+    return BigNumber(String(amount))
+        .div(10 ** decimals)
+        .toString();
 }
 
-export function parseCoins(amount: number | string, decimals: number = 8) {
+export function parseCoins(amount: number | string, decimals = 8) {
     // todo: return bigint for sat
     return BigNumber(amount)
         .times(10 ** decimals)
@@ -35,7 +34,7 @@ export function getDerivation(addrType: addrType) {
     }
 }
 
-export function getBytes(addrType: addrType, isInput: boolean = true) {
+export function getBytes(addrType: addrType, isInput = true) {
     switch (addrType) {
         case 'taproot':
             return isInput ? 58 : 43;
@@ -63,22 +62,14 @@ export function getScriptType(script: Buffer): addrType {
         return 'segwit';
     }
 
-    if (
-        script[0] == opcodes.OP_DUP &&
-        script[1] == opcodes.OP_HASH160 &&
-        script[2] == 20
-    ) {
+    if (script[0] == opcodes.OP_DUP && script[1] == opcodes.OP_HASH160 && script[2] == 20) {
         return 'legacy';
     }
 
     throw new Error('Unknown address');
 }
 
-export function getAddress(
-    pubkey: Buffer,
-    addrType: addrType,
-    network: Network,
-) {
+export function getAddress(pubkey: Buffer, addrType: addrType, network: Network) {
     if (addrType === 'taproot') {
         const internalPubkey = pubkey.slice(1, 33);
         return payments.p2tr({

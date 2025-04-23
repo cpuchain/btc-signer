@@ -41,7 +41,7 @@ export class CoinProvider {
                 })
             ).json()) as {
                 result?: number;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
                 error?: string;
             };
 
@@ -55,9 +55,7 @@ export class CoinProvider {
                 parsedFee = this.feeFallback;
             }
 
-            return Math.floor(
-                parseCoins((parsedFee * this.feeMultiplier) / 1000),
-            );
+            return Math.floor(parseCoins((parsedFee * this.feeMultiplier) / 1000));
         } catch {
             return Math.floor(parseCoins(this.feeFallback / 1000));
         }
@@ -82,10 +80,7 @@ export class CoinProvider {
         return Number(data.blockbook?.bestHeight);
     }
 
-    async getUnspent(
-        address: string,
-        scan: boolean = false,
-    ): Promise<Array<UTXO>> {
+    async getUnspent(address: string, scan = false): Promise<UTXO[]> {
         let utxoUrl = `${this.backend}/api/v2/utxo/${address}`;
 
         if (scan) {
@@ -108,7 +103,7 @@ export class CoinProvider {
         }
 
         // Return UTXOs in an ascending order as we want to spend the oldest coins first
-        return (utxos as Array<UTXO>)
+        return (utxos as UTXO[])
             .map((utxo) => {
                 const pathSplit = utxo.path ? utxo.path.split('/') : [];
 
@@ -132,8 +127,8 @@ export class CoinProvider {
             });
     }
 
-    async getTransactions(txs: Array<string>): Promise<Array<TX>> {
-        const results: Array<TX> = [];
+    async getTransactions(txs: string[]): Promise<TX[]> {
+        const results: TX[] = [];
 
         for (const chunks of chunk(txs, this.txChunks)) {
             const chunkResults = await Promise.all(
@@ -200,7 +195,7 @@ export class MempoolProvider extends CoinProvider {
                 hourFee?: number;
                 economyFee?: number;
                 minimumFee?: number;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
                 error?: string;
             };
 
@@ -236,12 +231,9 @@ export class MempoolProvider extends CoinProvider {
     }
 
     private async getUtxoInternal(address: string) {
-        const resp = await fetch(
-            `${this.backend}/api/address/${address}/utxo`,
-            {
-                method: 'GET',
-            },
-        );
+        const resp = await fetch(`${this.backend}/api/address/${address}/utxo`, {
+            method: 'GET',
+        });
 
         // API throws Invalid Bitcoin address
         if (!resp.ok) {
@@ -249,10 +241,10 @@ export class MempoolProvider extends CoinProvider {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (await resp.json()) as Array<any>;
+        return (await resp.json()) as any[];
     }
 
-    async getUnspent(address: string): Promise<Array<UTXO>> {
+    async getUnspent(address: string): Promise<UTXO[]> {
         const [blockHeight, utxos] = await Promise.all([
             this.getBlockNumber(),
             this.getUtxoInternal(address),
@@ -281,20 +273,17 @@ export class MempoolProvider extends CoinProvider {
             });
     }
 
-    async getTransactions(txs: Array<string>): Promise<Array<TX>> {
-        const results: Array<TX> = [];
+    async getTransactions(txs: string[]): Promise<TX[]> {
+        const results: TX[] = [];
 
         for (const chunks of chunk(txs, this.txChunks)) {
             const chunkResults = await Promise.all(
                 chunks.map(async (tx, index) => {
                     await sleep(10 * index);
 
-                    const resp = await fetch(
-                        `${this.backend}/api/tx/${tx}/hex`,
-                        {
-                            method: 'GET',
-                        },
-                    );
+                    const resp = await fetch(`${this.backend}/api/tx/${tx}/hex`, {
+                        method: 'GET',
+                    });
 
                     const hex = await resp.text();
 

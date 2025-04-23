@@ -12,7 +12,7 @@ declare module 'coininfo' {
         };
         bech32?: string;
         // vSeeds
-        seedsDns?: Array<string>;
+        seedsDns?: string[];
         // base58Prefixes
         versions: {
             bip32: {
