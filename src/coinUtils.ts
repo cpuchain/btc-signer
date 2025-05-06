@@ -1,7 +1,8 @@
-import { opcodes, payments, Network } from 'bitcoinjs-lib';
-import { BigNumber } from 'bignumber.js';
-
+import type { Network } from 'bitcoinjs-lib';
+import { bitcoin, BigNumber } from './factory';
 import type { addrType } from './types';
+
+const { opcodes, payments } = bitcoin;
 
 // todo: drop number for sats
 export function formatCoins(amount: bigint | number | string, decimals = 8) {

@@ -22,13 +22,25 @@ Easy to use Blockbook Provider and Signer object for Bitcoin-like Coins
 
 - [] Blockchair (Maybe at the future)
 
+### TO-DO
+
+- [] More API integration (Blockchair, etc)
+
+- [] Migrate PSBT generation from bitcoinjs to @scure/btc-signer to support bigint (to support Dogecoin, etc)
+
+- [] Deprecate number input, only accept bigint for sat amounts
+
+- [] Custom decimals (if possible)
+
+- [] Bitcoin Cash / Bitcoin Gold / Zcash (transparent) support
+
 ### Quick Start
 
 ```ts
 // bitcoin reexports bitcoinjs lib
-import { bitcoin, MnemonicWallet, CoinProvider } from 'btc-signer';
+import { bitcoin, MnemonicWallet, MempoolProvider } from 'btc-signer';
 
-const provider = new CoinProvider({
+const provider = new MempoolProvider({
     backend: 'https://mempool.space/testnet4'
 });
 
@@ -50,13 +62,13 @@ console.log(wallet.privateKeyWithPrefix);
 console.log(wallet.publicKey);
 
 // output is txid
-console.log(await wallet.sendTransaction([
+wallet.sendTransaction([
     {
         address: 'tb1pfewlxm8meyyvgjydfu7v8j4ej64symj6ut8sf66h9germp94qgzsgnnjhk',
         // 1 sat
         value: 1
     }
-]));
+]).then(console.log);
 ```
 
 ### Examples

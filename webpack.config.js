@@ -1,4 +1,5 @@
 const path = require('path');
+const { BannerPlugin } = require('webpack');
 const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
 
 const config = {
@@ -22,15 +23,31 @@ const config = {
         library: 'btcSigner',
         libraryTarget: 'umd'
     },
+    plugins: [
+        new BannerPlugin({
+            banner: `if (!globalThis.process?.browser) {
+    globalThis.process = { browser: true, env: {}, };
+}`,
+            raw: true,
+        }),
+    ],
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+        alias: {
+            crypto: false,
+            '@bitcoinerlab/secp256k1': false,
+            'bignumber.js': false,
+            bip32: false,
+            bip39: false,
+            'bitcoinjs-lib': false,
+            bs58check: false,
+            coininfo: false,
+            ecpair: false,
+        },
     },
     optimization: {
         minimize: false,
     },
-    plugins: [
-        new NodePolyfillPlugin(),
-    ]
 }
 
 module.exports = [
@@ -47,23 +64,35 @@ module.exports = [
     },
     {
         ...config,
-        entry: './src/bip39org.ts',
+        entry: './src/bitcoinjs.ts',
         output: {
-            filename: 'bip39org.umd.js',
+            filename: 'bitcoin.umd.js',
             path: path.resolve(__dirname, './lib'),
-            library: 'bip39org',
             libraryTarget: 'umd'
+        },
+        plugins: [
+            ...config.plugins,
+            new NodePolyfillPlugin(),
+        ],
+        resolve: {
+            extensions: ['.tsx', '.ts', '.js'],
         },
     },
     {
         ...config,
-        entry: './src/bip39org.ts',
+        entry: './src/bitcoinjs.ts',
         output: {
-            filename: 'bip39org.umd.min.js',
+            filename: 'bitcoin.umd.min.js',
             path: path.resolve(__dirname, './lib'),
-            library: 'bip39org',
             libraryTarget: 'umd'
         },
+        plugins: [
+            ...config.plugins,
+            new NodePolyfillPlugin(),
+        ],
+        resolve: {
+            extensions: ['.tsx', '.ts', '.js'],
+        },
         optimization: {},
-    }
+    },
 ]

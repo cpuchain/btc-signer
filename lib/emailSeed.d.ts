@@ -1,4 +1,6 @@
-export { mnemonicToEntropy, mnemonicToSeed } from 'bip39';
+export declare const entropyToMnemonic: typeof import("bip39").entropyToMnemonic;
+export declare const mnemonicToEntropy: typeof import("bip39").mnemonicToEntropy;
+export declare const mnemonicToSeed: typeof import("bip39").mnemonicToSeed;
 /**
  * Legacy coinb.in style hex string generation with email and password
  */

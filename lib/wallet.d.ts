@@ -1,4 +1,4 @@
-import { Psbt, Transaction } from 'bitcoinjs-lib';
+import type { Psbt as btcPsbt } from 'bitcoinjs-lib';
 import type { BIP32Interface } from 'bip32';
 import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
@@ -13,9 +13,12 @@ export interface populateOptions {
     cachedBalance?: CoinBalance;
     requiredConfirmations?: number;
 }
+/**
+ * Select UTXO inputs based on desired outputs
+ */
 export declare function getInputs(utxos: UTXO[], outputs: Output[], spendAll?: boolean): UTXO[];
 export interface CoinTXProperties {
-    psbt?: Psbt;
+    psbt?: btcPsbt;
     fees: string;
     inputAmounts: string;
     inputs: UTXO[];
@@ -24,7 +27,7 @@ export interface CoinTXProperties {
     vBytes: number;
 }
 export declare class CoinTX {
-    psbt?: Psbt;
+    psbt?: btcPsbt;
     fees: string;
     inputAmounts: string;
     inputs: UTXO[];
@@ -98,7 +101,7 @@ export declare class CoinWallet {
     populatePsbt(coinTx: CoinTX): Promise<void>;
     populateConsolidation({ customFeePerByte, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX[]>;
     parseTransaction(psbtHex: string): CoinTX;
-    signTransaction(psbt: Psbt, keyIndex?: number): Transaction;
+    signTransaction(psbt: btcPsbt, keyIndex?: number): import("bitcoinjs-lib").Transaction;
     sendTransaction(outputs: Output[], populateOptions?: populateOptions): Promise<CoinTX>;
     sendConsolidations({ customFeePerByte, cachedBalance, requiredConfirmations, }?: populateOptions): Promise<CoinTX[]>;
 }
@@ -118,7 +121,7 @@ export declare class MnemonicWallet extends CoinWallet {
     };
     getKey(index?: number): BIP32Interface;
     getBip32Derivation(index?: number): (Bip32Derivation | TapBip32Derivation)[];
-    signTransaction(psbt: Psbt): Transaction;
+    signTransaction(psbt: btcPsbt): import("bitcoinjs-lib").Transaction;
 }
 export interface ViewKey {
     publicKey: Buffer;

@@ -2,10 +2,16 @@ import { chunk, sleep } from './utils';
 import { parseCoins } from './coinUtils';
 import type { UTXO, TX } from './types';
 
+export const DEFAULT_FEE_MULTIPLIER = 2;
+
+export type feeMultiplier = () => Promise<number> | number;
+
 export interface ProviderConfig {
     backend: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchOptions?: any;
     feeFallback?: number;
-    feeMultiplier?: number;
+    feeMultiplier?: feeMultiplier;
     txChunks?: number;
     range?: number; // max scan range
 }
@@ -17,15 +23,18 @@ export interface ProviderConfig {
  */
 export class CoinProvider {
     backend: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchOptions?: any;
     feeFallback: number;
-    feeMultiplier: number;
+    feeMultiplier?: feeMultiplier;
     txChunks: number;
     range: number; // max scan range
 
     constructor(config: ProviderConfig) {
         this.backend = config.backend;
+        this.fetchOptions = config.fetchOptions;
         this.feeFallback = config.feeFallback || 0.00001;
-        this.feeMultiplier = config.feeMultiplier || 2;
+        this.feeMultiplier = config.feeMultiplier;
         this.txChunks = config.txChunks || 10;
         this.range = config.range || 20;
     }
@@ -34,6 +43,7 @@ export class CoinProvider {
         try {
             const data = (await (
                 await fetch(`${this.backend}/api/v2/estimatefee/1`, {
+                    ...(this.fetchOptions || {}),
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -55,7 +65,9 @@ export class CoinProvider {
                 parsedFee = this.feeFallback;
             }
 
-            return Math.floor(parseCoins((parsedFee * this.feeMultiplier) / 1000));
+            const feeMultiplier = (await this.feeMultiplier?.()) || DEFAULT_FEE_MULTIPLIER;
+
+            return Math.floor(parseCoins((parsedFee * feeMultiplier) / 1000));
         } catch {
             return Math.floor(parseCoins(this.feeFallback / 1000));
         }
@@ -63,6 +75,7 @@ export class CoinProvider {
 
     async getBlockNumber() {
         const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
+            ...(this.fetchOptions || {}),
             method: 'GET',
         });
 
@@ -89,6 +102,7 @@ export class CoinProvider {
 
         const utxos = (await (
             await fetch(utxoUrl, {
+                ...(this.fetchOptions || {}),
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -137,6 +151,7 @@ export class CoinProvider {
 
                     const result = (await (
                         await fetch(`${this.backend}/api/v2/tx/${tx}`, {
+                            ...(this.fetchOptions || {}),
                             method: 'GET',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -162,6 +177,7 @@ export class CoinProvider {
 
     async broadcastTransaction(signedTx: string) {
         const resp = await fetch(`${this.backend}/api/v2/sendtx/`, {
+            ...(this.fetchOptions || {}),
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -187,6 +203,7 @@ export class MempoolProvider extends CoinProvider {
         try {
             const data = (await (
                 await fetch(`${this.backend}/api/v1/fees/recommended`, {
+                    ...(this.fetchOptions || {}),
                     method: 'GET',
                 })
             ).json()) as {
@@ -211,7 +228,9 @@ export class MempoolProvider extends CoinProvider {
                 parsedFee = fallbackFee;
             }
 
-            return Math.floor(parsedFee * this.feeMultiplier);
+            const feeMultiplier = (await this.feeMultiplier?.()) || DEFAULT_FEE_MULTIPLIER;
+
+            return Math.floor(parsedFee * feeMultiplier);
         } catch {
             return Math.floor(parseCoins(this.feeFallback / 1000));
         }
@@ -219,6 +238,7 @@ export class MempoolProvider extends CoinProvider {
 
     async getBlockNumber() {
         const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
+            ...(this.fetchOptions || {}),
             method: 'GET',
         });
 
@@ -232,6 +252,7 @@ export class MempoolProvider extends CoinProvider {
 
     private async getUtxoInternal(address: string) {
         const resp = await fetch(`${this.backend}/api/address/${address}/utxo`, {
+            ...(this.fetchOptions || {}),
             method: 'GET',
         });
 
@@ -282,6 +303,7 @@ export class MempoolProvider extends CoinProvider {
                     await sleep(10 * index);
 
                     const resp = await fetch(`${this.backend}/api/tx/${tx}/hex`, {
+                        ...(this.fetchOptions || {}),
                         method: 'GET',
                     });
 
@@ -307,6 +329,7 @@ export class MempoolProvider extends CoinProvider {
 
     async broadcastTransaction(signedTx: string) {
         const resp = await fetch(`${this.backend}/api/tx`, {
+            ...(this.fetchOptions || {}),
             method: 'POST',
             body: signedTx,
         });

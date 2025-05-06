@@ -1,37 +1,22 @@
 import { webcrypto } from 'crypto';
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
-declare namespace globalThis {
-    // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
-    var window: any;
-    // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
-    var crypto: any;
-}
-
 export const textEncoder = new TextEncoder();
 export const textDecoder = new TextDecoder();
 
-export const isNode =
-    !(
-        process as typeof process & {
-            browser?: boolean;
-        }
-    ).browser && typeof globalThis.window === 'undefined';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const isNode = !(process as any)?.browser && typeof (globalThis as any).window === 'undefined';
 
 export const crypto = isNode ? webcrypto : (globalThis.crypto as typeof webcrypto);
 
-export function getRandomBytes(bytesLength = 32) {
-    return crypto.getRandomValues(new Uint8Array(bytesLength));
-}
-
-export function hexToBytes(hexString: string) {
-    if (hexString.slice(0, 2) === '0x') {
-        hexString = hexString.replace('0x', '');
+export function hexToBytes(input: bigint | string): Uint8Array {
+    let hex: string = typeof input === 'bigint' ? input.toString(16) : input;
+    if (hex.startsWith('0x')) {
+        hex = hex.slice(2);
     }
-    if (hexString.length % 2 !== 0) {
-        hexString = '0' + hexString;
+    if (hex.length % 2 !== 0) {
+        hex = '0' + hex;
     }
-    return Uint8Array.from(hexString.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []);
+    return Uint8Array.from((hex.match(/.{1,2}/g) as string[]).map((byte) => parseInt(byte, 16)));
 }
 
 export function binaryToBytes(binaryString: string) {
@@ -41,11 +26,11 @@ export function binaryToBytes(binaryString: string) {
     return new Uint8Array(binaryString.match(/(.{1,8})/g)?.map((bin) => parseInt(bin, 2)) || []);
 }
 
-export function base64ToBytes(baseString: string) {
-    return Uint8Array.from(atob(baseString), (c) => c.charCodeAt(0));
+export function base64ToBytes(base64: string): Uint8Array {
+    return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 }
 
-export function bytesToHex(bytes: Uint8Array) {
+export function bytesToHex(bytes: Uint8Array): string {
     return (
         '0x' +
         Array.from(bytes)
@@ -58,23 +43,27 @@ export function bytesToHex(bytes: Uint8Array) {
  * Converts bytes array to a binary string
  * https://github.com/hujiulong/web-bip39/blob/v0.0.2/src/utils.ts#L25
  */
-export function bytesToBinary(bytes: Uint8Array) {
+export function bytesToBinary(bytes: Uint8Array): string {
     return Array.from(bytes)
         .map((b) => b.toString(2).padStart(8, '0'))
         .join('');
 }
 
-export function bytesToBase64(bytes: Uint8Array) {
+export function bytesToBase64(bytes: Uint8Array): string {
     return btoa(bytes.reduce((data, byte) => data + String.fromCharCode(byte), ''));
 }
 
-export async function digest(input: Uint8Array, algorithm = 'SHA-512') {
+export function rBytes(bytesLength = 32): Uint8Array {
+    return crypto.getRandomValues(new Uint8Array(bytesLength));
+}
+
+export async function digest(input: Uint8Array, algorithm = 'SHA-512'): Promise<Uint8Array> {
     return new Uint8Array(await crypto.subtle.digest(algorithm, input));
 }
 
 // Repeat sha hex string operation
 // Compatible with coinb.in wallet
-export async function repeatDigest(input: string, count = 1, algorithm = 'SHA-512') {
+export async function repeatDigest(input: string, count = 1, algorithm = 'SHA-512'): Promise<string> {
     // Prevent buffer output
     if (count < 1) {
         throw new Error('Invalid sha count');
@@ -91,7 +80,7 @@ export async function pbkdf2(
     iterations = 2048,
     byteLength = 512,
     hash = 'SHA-512',
-) {
+): Promise<Uint8Array> {
     const baseKey = await crypto.subtle.importKey('raw', input, 'PBKDF2', false, ['deriveBits']);
 
     const arrayBuffer = await crypto.subtle.deriveBits(
@@ -119,7 +108,7 @@ export async function getKeyAndIv(
     iterations = 10000,
     cipher = 'AES-CBC',
     cipherLength = 256,
-) {
+): Promise<{ iv: Uint8Array; key: webcrypto.CryptoKey }> {
     const enc = textEncoder.encode(password);
 
     const keys = await pbkdf2(enc, salt, iterations, cipherLength + 128, hash);
@@ -143,8 +132,8 @@ export async function encryptString(
     cipher = 'AES-CBC',
     cipherLength = 256,
     saltSize = 8,
-) {
-    const salt = saltArray || getRandomBytes(saltSize);
+): Promise<string> {
+    const salt = saltArray || rBytes(saltSize);
 
     const { iv, key } = await getKeyAndIv(password, salt, hash, iterations, cipher, cipherLength);
 
@@ -177,7 +166,7 @@ export async function decryptString(
     cipher = 'AES-CBC',
     cipherLength = 256,
     saltSize = 8,
-) {
+): Promise<string> {
     // 1. Separate ciphertext, salt, and iv
     const enc = base64ToBytes(encryptedString);
     // Salted__ prefix

@@ -1,5 +1,4 @@
-import { entropyToMnemonic, mnemonicToSeed } from 'bip39';
-
+import { bitcoin } from './factory';
 import {
     crypto,
     digest,
@@ -11,12 +10,18 @@ import {
     binaryToBytes,
 } from './cryptoUtils';
 
-export { mnemonicToEntropy, mnemonicToSeed } from 'bip39';
+const { bip39, Buffer } = bitcoin;
+
+export const entropyToMnemonic = bip39.entropyToMnemonic;
+
+export const mnemonicToEntropy = bip39.mnemonicToEntropy;
+
+export const mnemonicToSeed = bip39.mnemonicToSeed;
 
 /**
  * Legacy coinb.in style hex string generation with email and password
  */
-export function generateHexWithIdLegacy(email: string, pass: string) {
+export function generateHexWithIdLegacy(email: string, pass: string): Promise<string> {
     let s = email;
     s += '|' + pass + '|';
     s += s.length + '|!@' + (pass.length * 7 + email.length) * 7;
@@ -29,7 +34,12 @@ export function generateHexWithIdLegacy(email: string, pass: string) {
     return repeatDigest(s, 52, 'SHA-256');
 }
 
-export async function generateHexWithId(id: string, password: string, thirdParams: string[] = [], nonce = 0) {
+export async function generateHexWithId(
+    id: string,
+    password: string,
+    thirdParams: string[] = [],
+    nonce = 0,
+): Promise<string> {
     if (id.length < 5 || password.length < 5) {
         throw new Error('Invalid id or password length, must longer than 5');
     }
@@ -74,7 +84,7 @@ export async function generateHexWithId(id: string, password: string, thirdParam
 /**
  * Get iancoleman style hashed entropy for specific mnemonic length
  */
-export async function getEntropy(initEntropy: string, mnemonicLength: number) {
+export async function getEntropy(initEntropy: string, mnemonicLength: number): Promise<string> {
     const shaHex = await digest(textEncoder.encode(initEntropy), 'SHA-256');
 
     let bins = bytesToBinary(shaHex);

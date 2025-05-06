@@ -1,14 +1,4 @@
-import {
-    Psbt,
-    Transaction,
-    address as bitcoinAddress,
-    payments,
-    crypto as bitcoinCrypto,
-    networks,
-} from 'bitcoinjs-lib';
-import b58 from 'bs58check';
-import { generateMnemonic, mnemonicToSeedSync } from 'bip39';
-
+import type { Psbt as btcPsbt } from 'bitcoinjs-lib';
 import type { BIP32Interface } from 'bip32';
 import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
@@ -23,10 +13,24 @@ import {
     getPubBytes,
 } from './coinUtils';
 import { electrumKeys } from './types';
-import { bip32, ECPair } from './factory';
-
+import { bitcoin } from './factory';
 import type { CoinProvider } from './provider';
 import type { addrType, CoinInfo, Output, UTXO } from './types';
+
+const {
+    Psbt,
+    Transaction,
+    address: bitcoinAddress,
+    payments,
+    crypto: bitcoinCrypto,
+    networks,
+
+    Buffer,
+    bip32,
+    bip39,
+    bs58check,
+    ECPair,
+} = bitcoin;
 
 export const RBF_INPUT_SEQUENCE = 0xfffffffd;
 
@@ -39,6 +43,9 @@ export interface populateOptions {
     requiredConfirmations?: number;
 }
 
+/**
+ * Select UTXO inputs based on desired outputs
+ */
 export function getInputs(utxos: UTXO[], outputs: Output[], spendAll = false) {
     // Throw if the outputs are not specified but this is not a consolidation nor balance calculation
     if (!outputs.length && !spendAll) {
@@ -79,7 +86,7 @@ export function getInputs(utxos: UTXO[], outputs: Output[], spendAll = false) {
 }
 
 export interface CoinTXProperties {
-    psbt?: Psbt;
+    psbt?: btcPsbt;
     fees: string;
     inputAmounts: string;
     inputs: UTXO[];
@@ -89,7 +96,7 @@ export interface CoinTXProperties {
 }
 
 export class CoinTX {
-    psbt?: Psbt;
+    psbt?: btcPsbt;
     fees: string;
     inputAmounts: string;
     inputs: UTXO[];
@@ -574,7 +581,14 @@ export class CoinWallet {
         });
 
         const outputs = psbt.txOutputs.map((output) => {
-            const bytes = getBytes(getScriptType(output.script), false);
+            let bytes = 0;
+
+            try {
+                bytes = getBytes(getScriptType(output.script), false);
+                // for some unknown script
+            } catch {
+                bytes = output.script?.byteLength || 0;
+            }
 
             outputAmounts += output.value;
             outputBytes += bytes;
@@ -604,7 +618,7 @@ export class CoinWallet {
         });
     }
 
-    signTransaction(psbt: Psbt, keyIndex = 0) {
+    signTransaction(psbt: btcPsbt, keyIndex = 0) {
         const key = this.getKey(keyIndex);
         const pubKey = Buffer.from(key.publicKey);
 
@@ -624,7 +638,7 @@ export class CoinWallet {
 
         await this.populatePsbt(coinTx);
 
-        const signed = this.signTransaction(coinTx.psbt as Psbt);
+        const signed = this.signTransaction(coinTx.psbt as btcPsbt);
 
         coinTx.txid = await this.provider.broadcastTransaction(signed.toHex());
 
@@ -643,7 +657,7 @@ export class CoinWallet {
         });
 
         for (const tx of txs) {
-            const signedTx = this.signTransaction(tx.psbt as Psbt);
+            const signedTx = this.signTransaction(tx.psbt as btcPsbt);
 
             tx.txid = await this.provider.broadcastTransaction(signedTx.toHex());
         }
@@ -660,7 +674,7 @@ export class MnemonicWallet extends CoinWallet {
     constructor(provider: CoinProvider, config: WalletConfig, onlySingle = false, generateRandom = true) {
         super(provider, config, false);
 
-        this.mnemonic = config.mnemonic || (generateRandom ? generateMnemonic(128) : '');
+        this.mnemonic = config.mnemonic || (generateRandom ? bip39.generateMnemonic(128) : '');
         this.mnemonicIndex = config.mnemonicIndex || 0;
 
         this.onlySingle = onlySingle;
@@ -682,7 +696,7 @@ export class MnemonicWallet extends CoinWallet {
     // Get Account Extended Public Key compatible with blockbook instance
     // Can cross-check with https://iancoleman.io/bip39/
     getPub() {
-        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
+        const root = bip32.fromSeed(bip39.mnemonicToSeedSync(this.mnemonic), this.network);
 
         const key = root.derivePath(
             `m/${getDerivation(this.addrType)}'/${this.network.versions.bip44 || 0}'/0'`,
@@ -697,10 +711,10 @@ export class MnemonicWallet extends CoinWallet {
         // https://github.com/bitcoinjs/bitcoinjs-lib/issues/1258
         const data = Buffer.concat([
             Buffer.from(getPubBytes(this.addrType), 'hex'),
-            b58.decode(key.neutered().toBase58()).slice(4),
+            bs58check.decode(key.neutered().toBase58()).slice(4),
         ]);
 
-        return b58.encode(data);
+        return bs58check.encode(data);
     }
 
     getUtxoAddress() {
@@ -717,7 +731,7 @@ export class MnemonicWallet extends CoinWallet {
     }
 
     getKey(index = 0) {
-        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
+        const root = bip32.fromSeed(bip39.mnemonicToSeedSync(this.mnemonic), this.network);
 
         return root.derivePath(
             `m/${getDerivation(this.addrType)}'/${this.network.versions.bip44 || 0}'/0'/0/${index}`,
@@ -729,7 +743,7 @@ export class MnemonicWallet extends CoinWallet {
             return super.getBip32Derivation(index);
         }
 
-        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
+        const root = bip32.fromSeed(bip39.mnemonicToSeedSync(this.mnemonic), this.network);
 
         const path = `m/${getDerivation(this.addrType)}'/${this.network.versions.bip44 || 0}'/0'/0/${index}`;
 
@@ -755,12 +769,12 @@ export class MnemonicWallet extends CoinWallet {
         ] as Bip32Derivation[];
     }
 
-    signTransaction(psbt: Psbt) {
+    signTransaction(psbt: btcPsbt) {
         if (this.onlySingle) {
             return super.signTransaction(psbt, this.mnemonicIndex);
         }
 
-        const root = bip32.fromSeed(mnemonicToSeedSync(this.mnemonic), this.network);
+        const root = bip32.fromSeed(bip39.mnemonicToSeedSync(this.mnemonic), this.network);
 
         // https://github.com/snapdao/btcsnap/pull/140
         if (this.addrType === 'taproot') {

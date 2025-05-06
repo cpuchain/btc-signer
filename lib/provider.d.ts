@@ -1,8 +1,11 @@
 import type { UTXO, TX } from './types';
+export declare const DEFAULT_FEE_MULTIPLIER = 2;
+export type feeMultiplier = () => Promise<number> | number;
 export interface ProviderConfig {
     backend: string;
+    fetchOptions?: any;
     feeFallback?: number;
-    feeMultiplier?: number;
+    feeMultiplier?: feeMultiplier;
     txChunks?: number;
     range?: number;
 }
@@ -13,8 +16,9 @@ export interface ProviderConfig {
  */
 export declare class CoinProvider {
     backend: string;
+    fetchOptions?: any;
     feeFallback: number;
-    feeMultiplier: number;
+    feeMultiplier?: feeMultiplier;
     txChunks: number;
     range: number;
     constructor(config: ProviderConfig);
