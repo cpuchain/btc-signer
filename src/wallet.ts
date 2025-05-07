@@ -1,4 +1,4 @@
-import type { Psbt as btcPsbt } from 'bitcoinjs-lib';
+import type { Psbt } from 'bitcoinjs-lib';
 import type { BIP32Interface } from 'bip32';
 import type { ECPairInterface } from 'ecpair';
 import type { Bip32Derivation, TapBip32Derivation } from 'bip174/src/lib/interfaces';
@@ -14,11 +14,11 @@ import {
 } from './coinUtils';
 import { electrumKeys } from './types';
 import { bitcoin } from './factory';
-import type { CoinProvider } from './provider';
+import { MempoolProvider, type CoinProvider } from './provider';
 import type { addrType, CoinInfo, Output, UTXO } from './types';
 
 const {
-    Psbt,
+    Psbt: btcPsbt,
     Transaction,
     address: bitcoinAddress,
     payments,
@@ -33,6 +33,8 @@ const {
 } = bitcoin;
 
 export const RBF_INPUT_SEQUENCE = 0xfffffffd;
+
+export const DEFAULT_FEE_MULTIPLIER = 2;
 
 export interface populateOptions {
     changeAddress?: string;
@@ -86,7 +88,7 @@ export function getInputs(utxos: UTXO[], outputs: Output[], spendAll = false) {
 }
 
 export interface CoinTXProperties {
-    psbt?: btcPsbt;
+    psbt?: Psbt;
     fees: string;
     inputAmounts: string;
     inputs: UTXO[];
@@ -96,7 +98,7 @@ export interface CoinTXProperties {
 }
 
 export class CoinTX {
-    psbt?: btcPsbt;
+    psbt?: Psbt;
     fees: string;
     inputAmounts: string;
     inputs: UTXO[];
@@ -154,13 +156,17 @@ export class CoinBalance {
     }
 }
 
-export interface WalletConfig {
-    mnemonic?: string;
-    mnemonicIndex?: number;
-    publicKey?: string;
-    privateKey?: string;
+export type feeMultiplier = () => Promise<number> | number;
+
+export interface WalletOptions {
     addrType?: addrType;
     network?: CoinInfo;
+    feeMultiplier?: feeMultiplier;
+    generateRandom?: boolean;
+
+    // Mnemonic specific
+    mnemonicIndex?: number;
+    onlySingle?: boolean;
 }
 
 export class CoinWallet {
@@ -171,14 +177,18 @@ export class CoinWallet {
 
     address: string;
     publicKey: string;
-    privateKey: string;
-    privateKeyWithPrefix: string;
+    privateKey?: string;
+    privateKeyWithPrefix?: string;
 
-    constructor(provider: CoinProvider, config: WalletConfig, generateRandom = true) {
+    feeMultiplier?: feeMultiplier;
+
+    constructor(privateKey: string | undefined, provider: CoinProvider, options?: WalletOptions) {
+        const generateRandom = options?.generateRandom ?? true;
+
         this.provider = provider;
 
         // Fallback to default bitcoin mainnet
-        this.network = config.network || {
+        this.network = options?.network || {
             ...networks.bitcoin,
             versions: {
                 bip44: 0,
@@ -186,10 +196,10 @@ export class CoinWallet {
         };
 
         // Disable segwit address on non segwit networks like dogecoin
-        this.addrType = this.network.bech32 ? config.addrType || 'taproot' : 'legacy';
+        this.addrType = this.network.bech32 ? options?.addrType || 'taproot' : 'legacy';
 
-        const keyPair = config.privateKey
-            ? ECPair.fromWIF(config.privateKey, this.network)
+        const keyPair = privateKey
+            ? ECPair.fromWIF(privateKey, this.network)
             : generateRandom
               ? ECPair.makeRandom({ network: this.network })
               : null;
@@ -198,19 +208,18 @@ export class CoinWallet {
 
         this.address = keyPair ? (getAddress(pubKey, this.addrType, this.network) as string) : '';
         this.publicKey = keyPair ? pubKey.toString('hex') : '';
-        this.privateKey = keyPair ? keyPair.toWIF() : '';
-        this.privateKeyWithPrefix = keyPair ? `${electrumKeys[this.addrType]}:${this.privateKey}` : '';
+        this.privateKey = keyPair ? keyPair.toWIF() : undefined;
+        this.privateKeyWithPrefix = keyPair ? `${electrumKeys[this.addrType]}:${this.privateKey}` : undefined;
+
+        this.feeMultiplier = options?.feeMultiplier;
     }
 
-    static fromBuffer(provider: CoinProvider, config: WalletConfig, bufferKey: Buffer) {
-        const network = config.network || networks.bitcoin;
-
-        const keyPair = ECPair.fromPrivateKey(bufferKey, { network });
-
-        return new CoinWallet(provider, {
-            ...config,
-            privateKey: keyPair.toWIF(),
+    static fromBuffer(bufferKey: Buffer, provider: CoinProvider, options?: WalletOptions) {
+        const keyPair = ECPair.fromPrivateKey(bufferKey, {
+            network: options?.network || networks.bitcoin,
         });
+
+        return new CoinWallet(keyPair.toWIF(), provider, options);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -264,10 +273,13 @@ export class CoinWallet {
 
         const { address, isPub } = this.getUtxoAddress();
 
-        const [feePerByte, unspents] = await Promise.all([
+        const [feeMultiplier, estimatedFee, unspents] = await Promise.all([
+            this.feeMultiplier?.(),
             provider.estimateFee(),
             provider.getUnspent(address, isPub),
         ]);
+
+        const feePerByte = Math.floor(estimatedFee * (feeMultiplier || DEFAULT_FEE_MULTIPLIER));
 
         const utxos = unspents.filter((utxo) => {
             if (utxo.coinbase && utxo.confirmations && utxo.confirmations < 100) {
@@ -424,7 +436,7 @@ export class CoinWallet {
 
         const { addrType, network } = this;
 
-        const psbt = new Psbt({ network });
+        const psbt = new btcPsbt({ network });
 
         inputs.forEach((input) => {
             const { txid: hash, vout: index, value, address, addressIndex } = input;
@@ -548,7 +560,7 @@ export class CoinWallet {
     }
 
     parseTransaction(psbtHex: string) {
-        const psbt = Psbt.fromHex(psbtHex, { network: this.network });
+        const psbt = btcPsbt.fromHex(psbtHex, { network: this.network });
 
         let inputAmounts = 0;
         let outputAmounts = 0;
@@ -618,7 +630,7 @@ export class CoinWallet {
         });
     }
 
-    signTransaction(psbt: btcPsbt, keyIndex = 0) {
+    signTransaction(psbt: Psbt, keyIndex = 0) {
         const key = this.getKey(keyIndex);
         const pubKey = Buffer.from(key.publicKey);
 
@@ -638,7 +650,7 @@ export class CoinWallet {
 
         await this.populatePsbt(coinTx);
 
-        const signed = this.signTransaction(coinTx.psbt as btcPsbt);
+        const signed = this.signTransaction(coinTx.psbt as Psbt);
 
         coinTx.txid = await this.provider.broadcastTransaction(signed.toHex());
 
@@ -657,7 +669,7 @@ export class CoinWallet {
         });
 
         for (const tx of txs) {
-            const signedTx = this.signTransaction(tx.psbt as btcPsbt);
+            const signedTx = this.signTransaction(tx.psbt as Psbt);
 
             tx.txid = await this.provider.broadcastTransaction(signedTx.toHex());
         }
@@ -671,13 +683,18 @@ export class MnemonicWallet extends CoinWallet {
     mnemonicIndex: number;
     onlySingle: boolean;
 
-    constructor(provider: CoinProvider, config: WalletConfig, onlySingle = false, generateRandom = true) {
-        super(provider, config, false);
+    constructor(mnemonic: string | undefined, provider: CoinProvider, options?: WalletOptions) {
+        super(undefined, provider, {
+            ...options,
+            generateRandom: false,
+        });
 
-        this.mnemonic = config.mnemonic || (generateRandom ? bip39.generateMnemonic(128) : '');
-        this.mnemonicIndex = config.mnemonicIndex || 0;
+        const generateRandom = options?.generateRandom ?? true;
 
-        this.onlySingle = onlySingle;
+        this.mnemonic = mnemonic || (generateRandom ? bip39.generateMnemonic(128) : '');
+        this.mnemonicIndex = options?.mnemonicIndex ?? 0;
+
+        this.onlySingle = options?.onlySingle ?? (provider instanceof MempoolProvider ? true : false);
 
         this.setKey(this.mnemonicIndex);
     }
@@ -769,7 +786,7 @@ export class MnemonicWallet extends CoinWallet {
         ] as Bip32Derivation[];
     }
 
-    signTransaction(psbt: btcPsbt) {
+    signTransaction(psbt: Psbt) {
         if (this.onlySingle) {
             return super.signTransaction(psbt, this.mnemonicIndex);
         }
@@ -804,10 +821,13 @@ export interface ViewKey {
 }
 
 export class VoidWallet extends CoinWallet {
-    constructor(provider: CoinProvider, config: WalletConfig) {
-        super(provider, config, false);
+    constructor(publicKey: string, provider: CoinProvider, options?: WalletOptions) {
+        super(undefined, provider, {
+            ...options,
+            generateRandom: false,
+        });
 
-        this.publicKey = config.publicKey as string;
+        this.publicKey = publicKey;
 
         this.address = getAddress(Buffer.from(this.publicKey, 'hex'), this.addrType, this.network) as string;
     }
@@ -821,5 +841,3 @@ export class VoidWallet extends CoinWallet {
         };
     }
 }
-
-export default MnemonicWallet;

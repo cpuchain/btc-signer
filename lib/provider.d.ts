@@ -1,11 +1,7 @@
 import type { UTXO, TX } from './types';
-export declare const DEFAULT_FEE_MULTIPLIER = 2;
-export type feeMultiplier = () => Promise<number> | number;
-export interface ProviderConfig {
-    backend: string;
+export declare const DEFAULT_TIMEOUT = 60000;
+export interface ProviderOptions {
     fetchOptions?: any;
-    feeFallback?: number;
-    feeMultiplier?: feeMultiplier;
     txChunks?: number;
     range?: number;
 }
@@ -17,11 +13,9 @@ export interface ProviderConfig {
 export declare class CoinProvider {
     backend: string;
     fetchOptions?: any;
-    feeFallback: number;
-    feeMultiplier?: feeMultiplier;
     txChunks: number;
     range: number;
-    constructor(config: ProviderConfig);
+    constructor(backend: string, options?: ProviderOptions);
     estimateFee(): Promise<number>;
     getBlockNumber(): Promise<number>;
     getUnspent(address: string, scan?: boolean): Promise<UTXO[]>;
@@ -36,4 +30,3 @@ export declare class MempoolProvider extends CoinProvider {
     getTransactions(txs: string[]): Promise<TX[]>;
     broadcastTransaction(signedTx: string): Promise<string>;
 }
-export default CoinProvider;

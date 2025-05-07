@@ -44,8 +44,9 @@ const provider = new MempoolProvider({
     backend: 'https://mempool.space/testnet4'
 });
 
-const wallet = new MnemonicWallet(provider, {
-    mnemonic: 'test test test test test test test test test test test junk',
+const mnemonic = 'test test test test test test test test test test test junk';
+
+const wallet = new MnemonicWallet(mnemonic, provider, {
     network: {
         ...bitcoin.networks.testnet,
         versions: {

@@ -2,16 +2,12 @@ import { chunk, sleep } from './utils';
 import { parseCoins } from './coinUtils';
 import type { UTXO, TX } from './types';
 
-export const DEFAULT_FEE_MULTIPLIER = 2;
+// Minute
+export const DEFAULT_TIMEOUT = 60000;
 
-export type feeMultiplier = () => Promise<number> | number;
-
-export interface ProviderConfig {
-    backend: string;
+export interface ProviderOptions {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fetchOptions?: any;
-    feeFallback?: number;
-    feeMultiplier?: feeMultiplier;
     txChunks?: number;
     range?: number; // max scan range
 }
@@ -25,72 +21,65 @@ export class CoinProvider {
     backend: string;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fetchOptions?: any;
-    feeFallback: number;
-    feeMultiplier?: feeMultiplier;
     txChunks: number;
     range: number; // max scan range
 
-    constructor(config: ProviderConfig) {
-        this.backend = config.backend;
-        this.fetchOptions = config.fetchOptions;
-        this.feeFallback = config.feeFallback || 0.00001;
-        this.feeMultiplier = config.feeMultiplier;
-        this.txChunks = config.txChunks || 10;
-        this.range = config.range || 20;
+    constructor(backend: string, options?: ProviderOptions) {
+        this.backend = backend;
+        this.fetchOptions = options?.fetchOptions;
+        this.txChunks = options?.txChunks || 10;
+        this.range = options?.range || 20;
     }
 
     async estimateFee(): Promise<number> {
-        try {
-            const data = (await (
-                await fetch(`${this.backend}/api/v2/estimatefee/1`, {
-                    ...(this.fetchOptions || {}),
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                })
-            ).json()) as {
-                result?: number;
+        const resp = await fetch(`${this.backend}/api/v2/estimatefee/1`, {
+            ...(this.fetchOptions || {}),
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
+        });
 
-                error?: string;
-            };
-
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            let parsedFee = Number(data.result);
-
-            if (!parsedFee || parsedFee < this.feeFallback) {
-                parsedFee = this.feeFallback;
-            }
-
-            const feeMultiplier = (await this.feeMultiplier?.()) || DEFAULT_FEE_MULTIPLIER;
-
-            return Math.floor(parseCoins((parsedFee * feeMultiplier) / 1000));
-        } catch {
-            return Math.floor(parseCoins(this.feeFallback / 1000));
+        if (!resp.ok) {
+            throw new Error(await resp.text());
         }
+
+        const { result, error } = (await resp.json()) as {
+            result?: number;
+            error?: string;
+        };
+
+        if (error) {
+            throw new Error(error);
+        }
+
+        return Math.floor(parseCoins(Number(result) / 1000));
     }
 
     async getBlockNumber() {
         const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
             ...(this.fetchOptions || {}),
             method: 'GET',
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
         });
 
-        const data = (await resp.json()) as {
+        if (!resp.ok) {
+            throw new Error(await resp.text());
+        }
+
+        const { error, blockbook } = (await resp.json()) as {
             error?: string;
             blockbook?: {
                 bestHeight: number;
             };
         };
 
-        if (data.error) {
-            throw new Error(data.error);
+        if (error) {
+            throw new Error(error);
         }
 
-        return Number(data.blockbook?.bestHeight);
+        return Number(blockbook?.bestHeight);
     }
 
     async getUnspent(address: string, scan = false): Promise<UTXO[]> {
@@ -100,17 +89,21 @@ export class CoinProvider {
             utxoUrl += `?gap=${this.range}`;
         }
 
-        const utxos = (await (
-            await fetch(utxoUrl, {
-                ...(this.fetchOptions || {}),
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            })
-        )
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .json()) as any;
+        const resp = await fetch(utxoUrl, {
+            ...(this.fetchOptions || {}),
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
+        });
+
+        if (!resp.ok) {
+            throw new Error(await resp.text());
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const utxos = (await resp.json()) as any;
 
         if (utxos.error) {
             throw new Error(utxos.error);
@@ -149,17 +142,21 @@ export class CoinProvider {
                 chunks.map(async (tx, index) => {
                     await sleep(10 * index);
 
-                    const result = (await (
-                        await fetch(`${this.backend}/api/v2/tx/${tx}`, {
-                            ...(this.fetchOptions || {}),
-                            method: 'GET',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                        })
-                    )
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        .json()) as any;
+                    const resp = await fetch(`${this.backend}/api/v2/tx/${tx}`, {
+                        ...(this.fetchOptions || {}),
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
+                    });
+
+                    if (!resp.ok) {
+                        throw new Error(await resp.text());
+                    }
+
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const result = (await resp.json()) as any;
 
                     if (result.error) {
                         throw new Error(result.error);
@@ -183,10 +180,45 @@ export class CoinProvider {
                 'Content-Type': 'application/json',
             },
             body: signedTx,
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
         });
 
-        const data = (await resp.json()) as {
+        if (!resp.ok) {
+            throw new Error(await resp.text());
+        }
+
+        const { result, error } = (await resp.json()) as {
             result: string;
+            error?: string;
+        };
+
+        if (error) {
+            throw new Error(error);
+        }
+
+        return result;
+    }
+}
+
+export class MempoolProvider extends CoinProvider {
+    async estimateFee(): Promise<number> {
+        const resp = await fetch(`${this.backend}/api/v1/fees/recommended`, {
+            ...(this.fetchOptions || {}),
+            method: 'GET',
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
+        });
+
+        if (!resp.ok) {
+            throw new Error(await resp.text());
+        }
+
+        const data = (await resp.json()) as {
+            fastestFee?: number;
+            halfHourFee?: number;
+            hourFee?: number;
+            economyFee?: number;
+            minimumFee?: number;
+
             error?: string;
         };
 
@@ -194,52 +226,14 @@ export class CoinProvider {
             throw new Error(data.error);
         }
 
-        return data.result;
-    }
-}
-
-export class MempoolProvider extends CoinProvider {
-    async estimateFee(): Promise<number> {
-        try {
-            const data = (await (
-                await fetch(`${this.backend}/api/v1/fees/recommended`, {
-                    ...(this.fetchOptions || {}),
-                    method: 'GET',
-                })
-            ).json()) as {
-                fastestFee?: number;
-                halfHourFee?: number;
-                hourFee?: number;
-                economyFee?: number;
-                minimumFee?: number;
-
-                error?: string;
-            };
-
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            const fallbackFee = parseCoins(this.feeFallback / 1000);
-
-            let parsedFee = Number(data.fastestFee);
-
-            if (!parsedFee || parsedFee < fallbackFee) {
-                parsedFee = fallbackFee;
-            }
-
-            const feeMultiplier = (await this.feeMultiplier?.()) || DEFAULT_FEE_MULTIPLIER;
-
-            return Math.floor(parsedFee * feeMultiplier);
-        } catch {
-            return Math.floor(parseCoins(this.feeFallback / 1000));
-        }
+        return Math.floor(Number(data.fastestFee));
     }
 
     async getBlockNumber() {
         const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
             ...(this.fetchOptions || {}),
             method: 'GET',
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
         });
 
         // API throws whatever reason
@@ -254,6 +248,7 @@ export class MempoolProvider extends CoinProvider {
         const resp = await fetch(`${this.backend}/api/address/${address}/utxo`, {
             ...(this.fetchOptions || {}),
             method: 'GET',
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
         });
 
         // API throws Invalid Bitcoin address
@@ -305,6 +300,7 @@ export class MempoolProvider extends CoinProvider {
                     const resp = await fetch(`${this.backend}/api/tx/${tx}/hex`, {
                         ...(this.fetchOptions || {}),
                         method: 'GET',
+                        signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
                     });
 
                     const hex = await resp.text();
@@ -332,6 +328,7 @@ export class MempoolProvider extends CoinProvider {
             ...(this.fetchOptions || {}),
             method: 'POST',
             body: signedTx,
+            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
         });
 
         const txid = await resp.text();
@@ -344,5 +341,3 @@ export class MempoolProvider extends CoinProvider {
         return txid;
     }
 }
-
-export default CoinProvider;
