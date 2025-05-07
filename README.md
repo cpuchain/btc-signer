@@ -34,6 +34,10 @@ Easy to use Blockbook Provider and Signer object for Bitcoin-like Coins
 
 - [] Bitcoin Cash / Bitcoin Gold / Zcash (transparent) support
 
+- [] Add test cases with mocking provider
+
+- [] Add example networks like ethers.js ( that could be loaded from string, tickers. btc, ltc, would be great )
+
 ### Quick Start
 
 ```ts
