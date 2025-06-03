@@ -1,7 +1,7 @@
+import type { BlockbookParams, Blockbook } from 'blockbook-fetcher';
 import type { UTXO, TX } from './types';
 export declare const DEFAULT_TIMEOUT = 60000;
-export interface ProviderOptions {
-    fetchOptions?: any;
+export interface ProviderOptions extends BlockbookParams {
     txChunks?: number;
     range?: number;
 }
@@ -12,6 +12,7 @@ export interface ProviderOptions {
  */
 export declare class CoinProvider {
     backend: string;
+    blockbook?: Blockbook;
     fetchOptions?: any;
     txChunks: number;
     range: number;
@@ -23,6 +24,8 @@ export declare class CoinProvider {
     broadcastTransaction(signedTx: string): Promise<string>;
 }
 export declare class MempoolProvider extends CoinProvider {
+    blockbook: undefined;
+    constructor(backend: string, options?: ProviderOptions);
     estimateFee(): Promise<number>;
     getBlockNumber(): Promise<number>;
     private getUtxoInternal;

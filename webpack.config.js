@@ -43,6 +43,7 @@ const config = {
             bs58check: false,
             coininfo: false,
             ecpair: false,
+            'blockbook-fetcher': false,
         },
     },
     optimization: {

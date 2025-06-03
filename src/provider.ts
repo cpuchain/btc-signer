@@ -1,13 +1,15 @@
+import type { BlockbookParams, Blockbook } from 'blockbook-fetcher';
+import { blockbook } from './factory';
 import { chunk, sleep } from './utils';
 import { parseCoins } from './coinUtils';
 import type { UTXO, TX } from './types';
 
+const { Blockbook: _Blockbook } = blockbook;
+
 // Minute
 export const DEFAULT_TIMEOUT = 60000;
 
-export interface ProviderOptions {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fetchOptions?: any;
+export interface ProviderOptions extends BlockbookParams {
     txChunks?: number;
     range?: number; // max scan range
 }
@@ -19,6 +21,7 @@ export interface ProviderOptions {
  */
 export class CoinProvider {
     backend: string;
+    blockbook?: Blockbook;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fetchOptions?: any;
     txChunks: number;
@@ -26,91 +29,31 @@ export class CoinProvider {
 
     constructor(backend: string, options?: ProviderOptions) {
         this.backend = backend;
+        this.blockbook = new _Blockbook(backend, options);
         this.fetchOptions = options?.fetchOptions;
         this.txChunks = options?.txChunks || 10;
         this.range = options?.range || 20;
     }
 
     async estimateFee(): Promise<number> {
-        const resp = await fetch(`${this.backend}/api/v2/estimatefee/1`, {
-            ...(this.fetchOptions || {}),
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
-        });
-
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-
-        const { result, error } = (await resp.json()) as {
-            result?: number;
-            error?: string;
-        };
-
-        if (error) {
-            throw new Error(error);
-        }
+        const result = await (this.blockbook as Blockbook).estimateFee();
 
         return Math.floor(parseCoins(Number(result) / 1000));
     }
 
     async getBlockNumber() {
-        const resp = await fetch(`${this.backend}/api/blocks/tip/height`, {
-            ...(this.fetchOptions || {}),
-            method: 'GET',
-            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
-        });
+        const result = await (this.blockbook as Blockbook).getStatus();
 
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-
-        const { error, blockbook } = (await resp.json()) as {
-            error?: string;
-            blockbook?: {
-                bestHeight: number;
-            };
-        };
-
-        if (error) {
-            throw new Error(error);
-        }
-
-        return Number(blockbook?.bestHeight);
+        return Number(result.backend.blocks);
     }
 
     async getUnspent(address: string, scan = false): Promise<UTXO[]> {
-        let utxoUrl = `${this.backend}/api/v2/utxo/${address}`;
-
-        if (scan) {
-            utxoUrl += `?gap=${this.range}`;
-        }
-
-        const resp = await fetch(utxoUrl, {
-            ...(this.fetchOptions || {}),
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
+        const utxos = await (this.blockbook as Blockbook).getUtxo(address, {
+            gap: scan ? this.range : undefined,
         });
 
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const utxos = (await resp.json()) as any;
-
-        if (utxos.error) {
-            throw new Error(utxos.error);
-        }
-
         // Return UTXOs in an ascending order as we want to spend the oldest coins first
-        return (utxos as UTXO[])
+        return (utxos as unknown as UTXO[])
             .map((utxo) => {
                 const pathSplit = utxo.path ? utxo.path.split('/') : [];
 
@@ -142,27 +85,7 @@ export class CoinProvider {
                 chunks.map(async (tx, index) => {
                     await sleep(10 * index);
 
-                    const resp = await fetch(`${this.backend}/api/v2/tx/${tx}`, {
-                        ...(this.fetchOptions || {}),
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
-                    });
-
-                    if (!resp.ok) {
-                        throw new Error(await resp.text());
-                    }
-
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const result = (await resp.json()) as any;
-
-                    if (result.error) {
-                        throw new Error(result.error);
-                    }
-
-                    return result as TX;
+                    return (this.blockbook as Blockbook).getTransaction(tx) as Promise<TX>;
                 }),
             );
 
@@ -172,35 +95,19 @@ export class CoinProvider {
         return results;
     }
 
-    async broadcastTransaction(signedTx: string) {
-        const resp = await fetch(`${this.backend}/api/v2/sendtx/`, {
-            ...(this.fetchOptions || {}),
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: signedTx,
-            signal: AbortSignal.timeout(this.fetchOptions?.timeout || DEFAULT_TIMEOUT),
-        });
-
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-
-        const { result, error } = (await resp.json()) as {
-            result: string;
-            error?: string;
-        };
-
-        if (error) {
-            throw new Error(error);
-        }
-
-        return result;
+    async broadcastTransaction(signedTx: string): Promise<string> {
+        return (this.blockbook as Blockbook).sendTransaction(signedTx);
     }
 }
 
 export class MempoolProvider extends CoinProvider {
+    blockbook: undefined;
+
+    constructor(backend: string, options?: ProviderOptions) {
+        super(backend, options);
+        this.blockbook = undefined;
+    }
+
     async estimateFee(): Promise<number> {
         const resp = await fetch(`${this.backend}/api/v1/fees/recommended`, {
             ...(this.fetchOptions || {}),

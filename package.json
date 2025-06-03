@@ -1,6 +1,6 @@
 {
     "name": "btc-signer",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Easy to use Blockbook Provider and Signer object for Bitcoin-like Coins",
     "license": "MIT",
     "author": "CPUchain",
@@ -37,6 +37,7 @@
         "bip32": "^4.0.0",
         "bip39": "^3.1.0",
         "bitcoinjs-lib": "^6.1.7",
+        "blockbook-fetcher": "^1.0.6",
         "bs58check": "^4.0.0",
         "buffer": "^6.0.3",
         "coininfo": "^5.2.1",
@@ -44,19 +45,18 @@
     },
     "devDependencies": {
         "@cpuchain/eslint": "^1.0.5",
-        "@types/node": "^22.15.8",
+        "@types/node": "^22.15.29",
         "esbuild-loader": "^4.3.0",
         "node-polyfill-webpack-plugin": "^4.1.0",
         "prettier": "^3.5.3",
         "ts-node": "^10.9.2",
         "tsc": "^2.0.4",
         "typescript": "^5.8.3",
-        "webpack": "^5.99.7",
+        "webpack": "^5.99.9",
         "webpack-cli": "^6.0.1"
     },
     "resolutions": {
         "buffer": "^6.0.3",
-        "bitcoinjs-lib": "^6.1.7",
         "safe-buffer": "^5.2.1"
     }
 }

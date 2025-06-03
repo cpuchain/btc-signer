@@ -1,5 +1,7 @@
 # btc-signer
 
+[![NPM Version](https://img.shields.io/npm/v/btc-signer)](https://www.npmjs.com/package/btc-signer)
+
 Easy to use Blockbook Provider and Signer object for Bitcoin-like Coins
 
 ### Features
@@ -32,7 +34,7 @@ Easy to use Blockbook Provider and Signer object for Bitcoin-like Coins
 
 - [] Custom decimals (if possible)
 
-- [] Bitcoin Cash / Bitcoin Gold / Zcash (transparent) support
+- [] Dogecoin / Bitcoin Cash / Bitcoin Gold / Zcash (transparent) support
 
 - [] Add test cases with mocking provider
 
